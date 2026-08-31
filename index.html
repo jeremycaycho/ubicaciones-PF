@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Ubicaciones - Almacén</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0b0b0d">
+<style>
+  :root{
+    --bg:#0b0b0d; --card:#18181b; --card2:#1f1f23; --border:#2e2e33;
+    --text:#f3f4f6; --muted:#8b8b93; --accent:#3b82f6; --accent-soft:#1e2a3f;
+    --verde:#22c55e; --verde-bg:#0f2a1a; --rojo:#ef4444; --rojo-bg:#2a1414;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; font-family:'Segoe UI',Roboto,Arial,sans-serif; background:var(--bg); color:var(--text);}
+  #app{max-width:420px; margin:0 auto; min-height:100vh; background:var(--bg); display:flex; flex-direction:column; padding:16px;}
+  .screen{display:none; flex-direction:column; gap:14px;}
+  .screen.active{display:flex;}
+
+  .topbar{display:flex; align-items:center; gap:10px;}
+  .topbar .back{font-size:20px; cursor:pointer; color:var(--text); width:28px;}
+  .topbar h1{flex:1; font-size:18px; margin:0;}
+  .topbar .menu-btn{font-size:20px; cursor:pointer;}
+  .who-line{font-size:12px; color:var(--muted); margin-top:-8px;}
+
+  #screen-login{align-items:center; padding-top:30px;}
+  .login-card{width:100%; text-align:center;}
+  .login-card h2{font-size:14px; color:var(--muted); font-weight:600; margin:0 0 12px;}
+  select{width:100%; padding:12px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:15px;}
+  .pin-dots{display:flex; justify-content:center; gap:10px; margin:18px 0;}
+  .pin-dots span{width:9px; height:9px; border-radius:50%; border:1.5px solid var(--muted); display:inline-block;}
+  .pin-dots span.filled{background:var(--text); border-color:var(--text);}
+  .keypad{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; width:100%;}
+  .keypad button{padding:16px 0; font-size:17px; border-radius:12px; border:1px solid var(--border); background:var(--card2); color:var(--text);}
+  .keypad button:active{background:var(--border);}
+  .keypad .empty{visibility:hidden;}
+
+  .field label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px;}
+  .field input, .field select{width:100%; padding:11px 12px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:15px;}
+  .field input:focus, .field select:focus{outline:none; border-color:var(--accent);}
+  .field .hint{font-size:11px; color:var(--muted); margin-top:4px;}
+  .split-row{display:flex; align-items:center; gap:8px;}
+  .split-row input{text-align:center;}
+  .split-row span{color:var(--muted); font-weight:600;}
+  .split-row .w-sm{width:64px; flex:none;}
+  .split-row .w-lg{width:84px; flex:none;}
+  .btn{width:100%; padding:13px; border-radius:10px; border:1px solid var(--border); background:var(--card2); color:var(--text); font-size:15px; font-weight:600;}
+  .btn:active{background:var(--border);}
+  .btn-accent{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .btn-outline{background:transparent;}
+
+  .menu-overlay{display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:30;}
+  .menu-overlay.open{display:block;}
+  .menu-panel{position:absolute; top:0; right:0; width:78%; max-width:300px; height:100%; background:var(--card); border-left:1px solid var(--border); padding:20px 16px; display:flex; flex-direction:column; gap:8px;}
+  .menu-panel h3{font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:0 0 8px;}
+  .menu-item{display:flex; align-items:center; gap:10px; padding:13px 10px; border-radius:10px; background:transparent; border:none; color:var(--text); font-size:14.5px; text-align:left; cursor:pointer;}
+  .menu-item:active{background:var(--card2);}
+  .menu-item .ico{font-size:17px; width:22px; text-align:center;}
+  .menu-item.danger{color:var(--rojo);}
+
+  .cards{display:flex; flex-direction:column; gap:10px;}
+  .prov-card{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; cursor:pointer;}
+  .prov-card:active{background:var(--card2);}
+  .prov-card .name{font-weight:600; font-size:15px; margin-bottom:4px;}
+  .prov-card .meta{font-size:12px; color:var(--muted); display:flex; justify-content:space-between;}
+  .empty-msg{color:var(--muted); font-size:12.5px; text-align:center; padding:20px 0;}
+
+  table{border-collapse:collapse; width:max-content; min-width:100%; font-size:12px;}
+  th{text-align:left; color:var(--muted); font-weight:600; padding:6px 10px; white-space:nowrap; border-bottom:1px solid var(--border);}
+  td{padding:7px 10px; white-space:nowrap; border-bottom:1px solid var(--border);}
+  .table-scroll{overflow-x:auto; border-radius:8px; border:1px solid var(--border);}
+  .table-scroll::-webkit-scrollbar{height:4px;}
+  .table-scroll::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
+
+  .estado-pill{padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700;}
+  .estado-pill.verde{background:var(--verde-bg); color:var(--verde);}
+  .estado-pill.rojo{background:var(--rojo-bg); color:var(--rojo);}
+
+  .sync-stats{display:flex; gap:10px;}
+  .sync-stat{flex:1; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 8px; text-align:center;}
+  .sync-stat .num{font-size:22px; font-weight:700;}
+  .sync-stat .lbl{font-size:11px; color:var(--muted); margin-top:2px;}
+  .sync-note{font-size:12px; color:var(--muted); text-align:center;}
+  .switch-row{display:flex; align-items:center; justify-content:space-between; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 14px;}
+  .switch-row .lbl-main{font-size:14px; font-weight:600;}
+  .switch-row .lbl-sub{font-size:11.5px; color:var(--muted); margin-top:2px;}
+  .toggle{position:relative; width:44px; height:26px; flex:none;}
+  .toggle input{opacity:0; width:0; height:0;}
+  .toggle .track{position:absolute; inset:0; background:var(--border); border-radius:20px; cursor:pointer; transition:.2s;}
+  .toggle .track:before{content:""; position:absolute; width:20px; height:20px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s;}
+  .toggle input:checked + .track{background:var(--accent);}
+  .toggle input:checked + .track:before{transform:translateX(18px);}
+  .info-box{font-size:11.5px; color:var(--muted); background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 12px; line-height:1.5;}
+
+  .toast{position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#27272a; color:#fff; padding:10px 18px; border-radius:20px; font-size:12.5px; z-index:40; opacity:0; transition:opacity .3s; max-width:90%; text-align:center;}
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- LOGIN -->
+  <div class="screen active" id="screen-login">
+    <div class="login-card">
+      <h2>Selecciona tu usuario</h2>
+      <select id="loginUser">
+        <option value="">-- Selecciona --</option>
+        <option>JCAYCHO</option>
+        <option>DCARRANZA</option>
+        <option>LILACHI</option>
+        <option>JFAJARDO</option>
+        <option>SFAJARDO</option>
+        <option>RCARREÑO</option>
+        <option>RNORIEGA</option>
+      </select>
+      <div class="pin-dots" id="pinDots">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="keypad" id="keypad">
+        <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+        <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+        <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+        <button data-k="del">Borrar</button><button data-k="0">0</button><span class="empty"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOME: CAPTURA -->
+  <div class="screen" id="screen-home">
+    <div class="topbar">
+      <h1>Nueva ubicación</h1>
+      <span class="menu-btn" id="btnMenu">☰</span>
+    </div>
+    <div class="who-line"><span id="capUser"></span> · <span id="capDate"></span></div>
+
+    <div class="field">
+      <label>Proveedor</label>
+      <select id="capProveedor"></select>
+    </div>
+    <div class="field">
+      <label>Código</label>
+      <input type="text" id="capCodigo" placeholder="Digitar código" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label>Lote</label>
+      <input type="text" id="capLote" placeholder="Digitar lote">
+    </div>
+    <div class="field">
+      <label>Fecha de vencimiento</label>
+      <div class="split-row">
+        <input type="text" id="capMM" class="w-sm" placeholder="MM" inputmode="numeric" maxlength="2">
+        <span>-</span>
+        <input type="text" id="capAA" class="w-sm" placeholder="AA" inputmode="numeric" maxlength="2">
+      </div>
+      <div class="hint">Mes 01-12, año no puede ser menor al actual</div>
+    </div>
+    <div class="field">
+      <label>Cantidad</label>
+      <input type="number" id="capCantidad" placeholder="0" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label>Ubicación</label>
+      <div class="split-row">
+        <input type="text" id="capUbic1" class="w-lg" placeholder="0000" maxlength="4">
+        <span>-</span>
+        <input type="text" id="capUbic2" class="w-sm" placeholder="XX" maxlength="2">
+      </div>
+    </div>
+    <button class="btn btn-accent" id="btnSaveRow">Guardar fila</button>
+  </div>
+
+  <!-- PROVEEDORES (tarjetas) -->
+  <div class="screen" id="screen-proveedores">
+    <div class="topbar">
+      <span class="back" id="backFromProveedores">←</span>
+      <h1>Proveedores</h1>
+      <span style="width:20px;"></span>
+    </div>
+    <div class="cards" id="provCards"></div>
+  </div>
+
+  <!-- TABLA DE UN PROVEEDOR -->
+  <div class="screen" id="screen-tabla">
+    <div class="topbar">
+      <span class="back" id="backFromTabla">←</span>
+      <h1 id="tablaTitle">Proveedor</h1>
+      <span style="width:20px;"></span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Código</th><th>Lote</th><th>Vcto</th><th>Cant.</th><th>Ubicación</th><th>Fecha</th><th>Usuario</th><th>Estado</th></tr></thead>
+        <tbody id="tablaBody"></tbody>
+      </table>
+    </div>
+    <div class="empty-msg" id="tablaEmpty" style="display:none;">Sin filas registradas para este proveedor.</div>
+  </div>
+
+  <!-- HISTORIAL: LISTA DE FECHAS (tarjetas) -->
+  <div class="screen" id="screen-historial">
+    <div class="topbar">
+      <span class="back" id="backFromHistorial">←</span>
+      <h1>Historial diario</h1>
+      <span style="width:20px;"></span>
+    </div>
+    <div class="cards" id="historialCards"></div>
+  </div>
+
+  <!-- HISTORIAL: DETALLE DE UNA FECHA -->
+  <div class="screen" id="screen-historial-detalle">
+    <div class="topbar">
+      <span class="back" id="backFromHistDetalle">←</span>
+      <h1 id="histDetalleTitle">Fecha</h1>
+      <span style="width:20px;"></span>
+    </div>
+    <div id="histDetalleBody"></div>
+  </div>
+
+  <!-- SINCRONIZACIÓN (solo informativa, todo es automático) -->
+  <div class="screen" id="screen-sync">
+    <div class="topbar">
+      <span class="back" id="backFromSync">←</span>
+      <h1>Sincronización</h1>
+      <span style="width:20px;"></span>
+    </div>
+    <div class="sync-stats">
+      <div class="sync-stat"><div class="num" id="syncTotal">0</div><div class="lbl">Total</div></div>
+      <div class="sync-stat"><div class="num" id="syncIngresado" style="color:var(--verde);">0</div><div class="lbl">Ingresado</div></div>
+      <div class="sync-stat"><div class="num" id="syncPendiente" style="color:var(--rojo);">0</div><div class="lbl">Pendiente</div></div>
+    </div>
+    <div class="info-box">
+      La sincronización es 100% automática: cada fila nueva se envía sola a Google Sheets apenas la guardas, y cada cierto tiempo la app revisa si algo cambió o se borró en la hoja para reflejarlo aquí. No necesitas tocar nada.
+    </div>
+    <div class="sync-note" id="syncLast">Aún no se ha sincronizado.</div>
+  </div>
+
+</div>
+
+<div class="menu-overlay" id="menuOverlay">
+  <div class="menu-panel">
+    <h3>Menú</h3>
+    <button class="menu-item" id="menuProveedores"><span class="ico">📋</span> Proveedores</button>
+    <button class="menu-item" id="menuHistorial"><span class="ico">🕒</span> Historial diario</button>
+    <button class="menu-item" id="menuSync"><span class="ico">☁️</span> Sincronización</button>
+    <button class="menu-item danger" id="menuLogout"><span class="ico">⎋</span> Cerrar sesión</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ======= CONFIGURACIÓN: pega aquí la URL de tu Web App de Google Apps Script ======= */
+const SHEET_WEB_APP_URL = "PEGA_AQUI_TU_URL_DE_DEPLOY_DE_APPS_SCRIPT";
+/* ==================================================================================== */
+
+const STORAGE_ROWS = "ubicaciones_registros_v4";
+const STORAGE_PROV = "ubicaciones_proveedores_v4";
+let currentUser = null;
+let currentPin = "";
+let lastSyncAt = null;
+
+/* ---------- Utilidades ---------- */
+function showScreen(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 2200);
+}
+function loadRows(){ return JSON.parse(localStorage.getItem(STORAGE_ROWS) || "[]"); }
+function saveRows(rows){ localStorage.setItem(STORAGE_ROWS, JSON.stringify(rows)); }
+function loadProveedores(){ return JSON.parse(localStorage.getItem(STORAGE_PROV) || "[]"); }
+function saveProveedores(list){ localStorage.setItem(STORAGE_PROV, JSON.stringify(list)); }
+function todayKey(){
+  const d = new Date();
+  return String(d.getDate()).padStart(2,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+d.getFullYear();
+}
+function nowTimeStr(){
+  const d = new Date();
+  return d.toLocaleTimeString("es-PE", {hour:"2-digit", minute:"2-digit"});
+}
+function parseFechaKey(fk){
+  const [d,m,y] = fk.split("-").map(Number);
+  return new Date(y,m-1,d).getTime();
+}
+function anioActualCorto(){ return new Date().getFullYear() % 100; }
+
+/* ---------- LOGIN ---------- */
+document.getElementById("keypad").addEventListener("click",(e)=>{
+  const k = e.target.dataset.k;
+  if(!k) return;
+  if(k === "del"){ currentPin = currentPin.slice(0,-1); }
+  else if(currentPin.length < 4){ currentPin += k; }
+  renderPin();
+  if(currentPin.length === 4) tryLogin();
+});
+function renderPin(){
+  document.querySelectorAll("#pinDots span").forEach((s,i)=>{
+    s.classList.toggle("filled", i < currentPin.length);
+  });
+}
+function tryLogin(){
+  const user = document.getElementById("loginUser").value;
+  if(!user){ showToast("Selecciona tu nombre"); currentPin=""; renderPin(); return; }
+  if(currentPin !== "1234"){ showToast("PIN incorrecto"); currentPin=""; renderPin(); return; }
+  currentUser = user;
+  document.getElementById("capUser").textContent = user;
+  document.getElementById("capDate").textContent = todayKey();
+  renderProveedorSelect();
+  showScreen("screen-home");
+  currentPin=""; renderPin();
+}
+function logout(){
+  currentUser = null; currentPin=""; renderPin();
+  document.getElementById("loginUser").value = "";
+  closeMenu();
+  showScreen("screen-login");
+}
+
+/* ---------- MENÚ ---------- */
+function openMenu(){ document.getElementById("menuOverlay").classList.add("open"); }
+function closeMenu(){ document.getElementById("menuOverlay").classList.remove("open"); }
+document.getElementById("btnMenu").addEventListener("click", openMenu);
+document.getElementById("menuOverlay").addEventListener("click", (e)=>{
+  if(e.target.id === "menuOverlay") closeMenu();
+});
+document.getElementById("menuProveedores").addEventListener("click", ()=>{
+  closeMenu(); renderProveedores(); showScreen("screen-proveedores");
+});
+document.getElementById("menuHistorial").addEventListener("click", ()=>{
+  closeMenu(); renderHistorial(); showScreen("screen-historial");
+});
+document.getElementById("menuSync").addEventListener("click", ()=>{
+  closeMenu(); renderSyncScreen(); showScreen("screen-sync");
+});
+document.getElementById("menuLogout").addEventListener("click", logout);
+
+/* ---------- BOTONES DE RETROCESO ---------- */
+document.getElementById("backFromProveedores").addEventListener("click", ()=> showScreen("screen-home"));
+document.getElementById("backFromTabla").addEventListener("click", ()=>{ renderProveedores(); showScreen("screen-proveedores"); });
+document.getElementById("backFromHistorial").addEventListener("click", ()=> showScreen("screen-home"));
+document.getElementById("backFromHistDetalle").addEventListener("click", ()=>{ renderHistorial(); showScreen("screen-historial"); });
+document.getElementById("backFromSync").addEventListener("click", ()=> showScreen("screen-home"));
+
+/* ---------- PROVEEDORES: gestión dinámica (siempre en MAYÚSCULAS) ---------- */
+function renderProveedorSelect(){
+  const sel = document.getElementById("capProveedor");
+  const provs = loadProveedores();
+  sel.innerHTML = "";
+  if(provs.length === 0){
+    const opt = document.createElement("option");
+    opt.value=""; opt.textContent="-- Sin proveedores, agrega uno --";
+    sel.appendChild(opt);
+  }
+  provs.forEach(p=>{
+    const opt = document.createElement("option");
+    opt.value = p; opt.textContent = p;
+    sel.appendChild(opt);
+  });
+  const optAdd = document.createElement("option");
+  optAdd.value = "__add__"; optAdd.textContent = "➕ Agregar nuevo proveedor";
+  sel.appendChild(optAdd);
+}
+document.getElementById("capProveedor").addEventListener("change", (e)=>{
+  if(e.target.value === "__add__"){
+    const nombre = prompt("Nombre del nuevo proveedor:");
+    if(nombre && nombre.trim()){
+      const limpio = nombre.trim().toUpperCase();
+      const provs = loadProveedores();
+      if(!provs.includes(limpio)){
+        provs.push(limpio);
+        saveProveedores(provs);
+      }
+      renderProveedorSelect();
+      document.getElementById("capProveedor").value = limpio;
+    } else {
+      renderProveedorSelect();
+    }
+  }
+});
+
+/* ---------- FORMATO Y VALIDACIÓN DE CAMPOS ---------- */
+// Lote: si tiene letras y números, las letras se muestran en mayúscula
+document.getElementById("capLote").addEventListener("input", (e)=>{
+  e.target.value = e.target.value.toUpperCase();
+});
+// Código: solo dígitos
+document.getElementById("capCodigo").addEventListener("input", (e)=>{
+  e.target.value = e.target.value.replace(/[^0-9]/g,"");
+});
+
+// Fecha de vencimiento: MM salta solo a AA, valida rangos
+const capMM = document.getElementById("capMM");
+const capAA = document.getElementById("capAA");
+capMM.addEventListener("input", ()=>{
+  capMM.value = capMM.value.replace(/[^0-9]/g,"").slice(0,2);
+  if(capMM.value.length === 2) capAA.focus();
+});
+capMM.addEventListener("blur", ()=>{
+  if(capMM.value.length === 1) capMM.value = "0"+capMM.value;
+  if(capMM.value){
+    const mes = Number(capMM.value);
+    if(mes < 1 || mes > 12){
+      showToast("El mes debe estar entre 01 y 12");
+      capMM.value = "";
+    }
+  }
+});
+capAA.addEventListener("input", ()=>{
+  capAA.value = capAA.value.replace(/[^0-9]/g,"").slice(0,2);
+});
+capAA.addEventListener("blur", ()=>{
+  if(capAA.value.length === 1) capAA.value = "0"+capAA.value;
+  if(capAA.value){
+    const anio = Number(capAA.value);
+    if(anio < anioActualCorto()){
+      showToast("El año no puede ser menor al actual (" + String(anioActualCorto()).padStart(2,"0") + ")");
+      capAA.value = "";
+    }
+  }
+});
+
+// Ubicación: primer bloque de 4 salta solo al segundo de 2
+const capUbic1 = document.getElementById("capUbic1");
+const capUbic2 = document.getElementById("capUbic2");
+capUbic1.addEventListener("input", ()=>{
+  capUbic1.value = capUbic1.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,4);
+  if(capUbic1.value.length === 4) capUbic2.focus();
+});
+capUbic2.addEventListener("input", ()=>{
+  capUbic2.value = capUbic2.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,2);
+});
+
+/* ---------- GUARDAR FILA ---------- */
+document.getElementById("btnSaveRow").addEventListener("click", ()=>{
+  const proveedor = document.getElementById("capProveedor").value;
+  const codigo = document.getElementById("capCodigo").value.trim();
+  const lote = document.getElementById("capLote").value.trim();
+  const mm = capMM.value;
+  const aa = capAA.value;
+  const cantidad = document.getElementById("capCantidad").value;
+  const ubic1 = capUbic1.value;
+  const ubic2 = capUbic2.value;
+
+  if(!proveedor || proveedor==="__add__"){ showToast("Selecciona o agrega un proveedor"); return; }
+  if(!codigo || !cantidad || !ubic1 || !ubic2){
+    showToast("Completa código, cantidad y ubicación completa");
+    return;
+  }
+  if(ubic1.length !== 4 || ubic2.length !== 2){
+    showToast("La ubicación debe ser 4 caracteres - 2 caracteres");
+    return;
+  }
+  if(!mm || !aa){
+    showToast("Completa mes y año de vencimiento (valores válidos)");
+    return;
+  }
+  const vcto = mm + "-" + aa;
+  const ubicacion = ubic1 + "-" + ubic2;
+
+  const rows = loadRows();
+  rows.push({
+    id: Date.now(), proveedor, codigo, lote, vcto,
+    cantidad: Number(cantidad), ubicacion,
+    fechaKey: todayKey(), hora: nowTimeStr(), usuario: currentUser,
+    estado: "no_ingresado", sincronizado: false
+  });
+  saveRows(rows);
+
+  ["capCodigo","capLote","capMM","capAA","capCantidad","capUbic1","capUbic2"].forEach(id=>document.getElementById(id).value="");
+  showToast("Fila guardada");
+  syncAll(); // se envía sola a Google Sheets al instante, sin botones
+});
+
+/* ---------- PANTALLA PROVEEDORES (tarjetas) ---------- */
+// Cada usuario ve SOLO lo que él mismo ingresó (aunque el celular tenga en caché
+// los datos de todos, por la sincronización). loadRows() sigue trayendo todo,
+// para que la sincronización funcione igual; misRows() es lo que se muestra en pantalla.
+function misRows(){
+  return loadRows().filter(r => r.usuario === currentUser);
+}
+
+function renderProveedores(){
+  const rows = misRows();
+  const proveedores = [...new Set(rows.map(r=>r.proveedor))];
+  const cont = document.getElementById("provCards");
+  cont.innerHTML = "";
+  if(proveedores.length === 0){
+    cont.innerHTML = '<div class="empty-msg">Aún no hay registros. Ve a "Nueva ubicación" para capturar el primero.</div>';
+    return;
+  }
+  proveedores.forEach(prov=>{
+    const provRows = rows.filter(r=>r.proveedor===prov);
+    const ultimaFecha = provRows.map(r=>r.fechaKey).sort((a,b)=>parseFechaKey(b)-parseFechaKey(a))[0];
+    const card = document.createElement("div");
+    card.className = "prov-card";
+    card.innerHTML = `
+      <div class="name">${prov}</div>
+      <div class="meta"><span>${provRows.length} filas</span><span>Última: ${ultimaFecha}</span></div>`;
+    card.addEventListener("click", ()=> openTabla(prov));
+    cont.appendChild(card);
+  });
+}
+function openTabla(prov){
+  document.getElementById("tablaTitle").textContent = prov;
+  const rows = misRows().filter(r=>r.proveedor===prov)
+    .sort((a,b)=> parseFechaKey(b.fechaKey) - parseFechaKey(a.fechaKey));
+  const body = document.getElementById("tablaBody");
+  body.innerHTML = "";
+  document.getElementById("tablaEmpty").style.display = rows.length ? "none" : "block";
+  rows.forEach(r=>{
+    const estClass = r.estado==="ingresado" ? "verde" : "rojo";
+    const estTxt = r.estado==="ingresado" ? "Ingresado" : "No ingresado";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.codigo}</td><td>${r.lote}</td><td>${r.vcto}</td><td>${r.cantidad}</td>
+      <td>${r.ubicacion}</td><td>${r.fechaKey}</td><td>${r.usuario}</td>
+      <td><span class="estado-pill ${estClass}">${estTxt}</span></td>`;
+    body.appendChild(tr);
+  });
+  showScreen("screen-tabla");
+}
+
+/* ---------- HISTORIAL: LISTA DE FECHAS (tarjetas) + DETALLE EN OTRA PANTALLA ---------- */
+function renderHistorial(){
+  const rows = misRows();
+  const fechas = [...new Set(rows.map(r=>r.fechaKey))]
+    .sort((a,b)=> parseFechaKey(b) - parseFechaKey(a));
+  const cont = document.getElementById("historialCards");
+  cont.innerHTML = "";
+  if(fechas.length === 0){
+    cont.innerHTML = '<div class="empty-msg">Aún no hay registros.</div>';
+    return;
+  }
+  fechas.forEach(fk=>{
+    const rowsFecha = rows.filter(r=>r.fechaKey===fk);
+    const card = document.createElement("div");
+    card.className = "prov-card";
+    card.innerHTML = `<div class="name">${fk}</div><div class="meta"><span>${rowsFecha.length} filas</span><span>›</span></div>`;
+    card.addEventListener("click", ()=> openHistorialDetalle(fk));
+    cont.appendChild(card);
+  });
+}
+function openHistorialDetalle(fk){
+  document.getElementById("histDetalleTitle").textContent = fk;
+  const rowsFecha = misRows().filter(r=>r.fechaKey===fk);
+  const proveedores = [...new Set(rowsFecha.map(r=>r.proveedor))];
+  const cont = document.getElementById("histDetalleBody");
+  cont.innerHTML = proveedores.map(prov=>{
+    const provRows = rowsFecha.filter(r=>r.proveedor===prov);
+    const rowsHtml = provRows.map(r=>{
+      const estClass = r.estado==="ingresado" ? "verde" : "rojo";
+      const estTxt = r.estado==="ingresado" ? "Ingresado" : "No ingresado";
+      return `<tr>
+        <td>${r.codigo}</td><td>${r.lote}</td><td>${r.vcto}</td><td>${r.cantidad}</td>
+        <td>${r.ubicacion}</td><td>${r.usuario}</td><td><span class="estado-pill ${estClass}">${estTxt}</span></td>
+      </tr>`;
+    }).join("");
+    return `
+      <div style="margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;">
+          <b>${prov}</b><span style="color:var(--muted);">${provRows.length} filas</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Código</th><th>Lote</th><th>Vcto</th><th>Cant.</th><th>Ubicación</th><th>Usuario</th><th>Estado</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join("");
+  showScreen("screen-historial-detalle");
+}
+
+/* ---------- SINCRONIZACIÓN: 100% AUTOMÁTICA, sin botones (estadísticas de MI usuario) ---------- */
+function renderSyncScreen(){
+  const rows = misRows();
+  const total = rows.length;
+  const ingresado = rows.filter(r=>r.estado==="ingresado").length;
+  document.getElementById("syncTotal").textContent = total;
+  document.getElementById("syncIngresado").textContent = ingresado;
+  document.getElementById("syncPendiente").textContent = total - ingresado;
+  document.getElementById("syncLast").textContent = lastSyncAt
+    ? "Última sincronización: " + lastSyncAt
+    : "Aún no se ha sincronizado.";
+}
+
+async function pushPendientes(){
+  const rows = loadRows();
+  const pendientes = rows.filter(r=>!r.sincronizado);
+  if(pendientes.length === 0) return {ok:true, enviados:0};
+  const idsEnviados = new Set(pendientes.map(r=>r.id));
+  const resp = await fetch(SHEET_WEB_APP_URL, {
+    method: "POST",
+    headers: {"Content-Type": "text/plain;charset=utf-8"},
+    body: JSON.stringify({ rows: pendientes.map(r=>({
+      id:r.id, proveedor:r.proveedor, codigo:r.codigo, lote:r.lote, vcto:r.vcto,
+      cantidad:r.cantidad, ubicacion:r.ubicacion, fecha:r.fechaKey, hora:r.hora, usuario:r.usuario
+    })) })
+  });
+  // En cuanto el navegador entrega la petición al servidor, la damos por enviada.
+  // Google Apps Script a veces no deja LEER la respuesta del POST desde el navegador
+  // (aunque la fila ya quedó guardada en la hoja); si esperáramos a leerla para recién
+  // marcar "sincronizado", esa fila se reintentaría en el siguiente ciclo y quedaría duplicada.
+  saveRows(loadRows().map(r=> idsEnviados.has(r.id) ? {...r, sincronizado:true} : r));
+  let data = { ok:true };
+  try{ data = await resp.json(); }catch(_e){ /* respuesta no legible: la fila ya se guardó igual */ }
+  return { ...data, enviados: pendientes.length };
+}
+
+// Trae TODO lo que hay guardado en Google Sheets (sin importar desde qué dispositivo se
+// haya ingresado) y lo combina con lo que este dispositivo todavía no alcanzó a enviar.
+// Así cualquier celular o laptop que abra la app ve lo mismo, siempre.
+async function pullTodos(){
+  const resp = await fetch(SHEET_WEB_APP_URL + "?action=todos");
+  const data = await resp.json();
+  if(!data.ok || !data.filas) return;
+
+  const pendientesLocales = loadRows().filter(r=>!r.sincronizado);
+  const idsPendientes = new Set(pendientesLocales.map(r=>String(r.id)));
+
+  const desdeServidor = data.filas
+    .filter(s => !idsPendientes.has(String(s.id))) // evita duplicar una fila que este mismo dispositivo recién creó
+    .map(s => ({
+      id: s.id,
+      proveedor: s.proveedor, codigo: s.codigo, lote: s.lote, vcto: s.vcto,
+      cantidad: s.cantidad, ubicacion: s.ubicacion, usuario: s.usuario,
+      fechaKey: s.fecha, hora: s.hora,
+      estado: s.estado === "Ingresado" ? "ingresado" : "no_ingresado",
+      sincronizado: true
+    }));
+
+  saveRows([...pendientesLocales, ...desdeServidor]);
+
+  // La lista de proveedores también se comparte entre dispositivos
+  const provsServidor = [...new Set(data.filas.map(f => f.proveedor).filter(Boolean))];
+  const union = [...new Set([...loadProveedores(), ...provsServidor])].sort();
+  saveProveedores(union);
+  if(document.getElementById("screen-home").classList.contains("active")) renderProveedorSelect();
+}
+
+let syncEnCurso = false;
+let reSyncPedido = false;
+async function syncAll(){
+  if(SHEET_WEB_APP_URL.startsWith("PEGA_AQUI")) return;
+  if(syncEnCurso){ reSyncPedido = true; return; } // no se pierde: se reintenta apenas termine la actual
+  syncEnCurso = true;
+  try{
+    await pushPendientes();
+    await pullTodos();
+    lastSyncAt = todayKey() + " " + nowTimeStr();
+    // refresca la pantalla visible si corresponde, para que el cambio se vea al instante
+    if(document.getElementById("screen-sync").classList.contains("active")) renderSyncScreen();
+    if(document.getElementById("screen-proveedores").classList.contains("active")) renderProveedores();
+    if(document.getElementById("screen-historial").classList.contains("active")) renderHistorial();
+    if(document.getElementById("screen-tabla").classList.contains("active")){
+      openTabla(document.getElementById("tablaTitle").textContent);
+    }
+  }catch(err){ /* sin conexión: se reintenta en el próximo ciclo, sin molestar al usuario */ }
+  finally{
+    syncEnCurso = false;
+    if(reSyncPedido){ reSyncPedido = false; syncAll(); }
+  }
+}
+
+// Arranca apenas carga la app, y sigue revisando en segundo plano sin ningún botón.
+syncAll();
+setInterval(()=>{ if(navigator.onLine) syncAll(); }, 15000);
+window.addEventListener("online", syncAll);
+
+// Registro del service worker: permite instalar la app (ícono propio, pantalla completa)
+// y que siga abriendo aunque no haya señal en el almacén.
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("service-worker.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
