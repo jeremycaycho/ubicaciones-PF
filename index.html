@@ -259,6 +259,8 @@
     <button class="menu-item" id="menuProveedores"><span class="ico">📋</span> Proveedores</button>
     <button class="menu-item" id="menuHistorial"><span class="ico">🕒</span> Historial diario</button>
     <button class="menu-item" id="menuSync"><span class="ico">☁️</span> Sincronización</button>
+    <button class="menu-item" id="menuCambiarPin" style="display:none;"><span class="ico">🔑</span> Cambiar mi contraseña</button>
+    <button class="menu-item" id="menuAdminUsuarios" style="display:none;"><span class="ico">👤</span> Gestionar usuarios</button>
     <button class="menu-item danger" id="menuLogout"><span class="ico">⎋</span> Cerrar sesión</button>
   </div>
 </div>
@@ -373,7 +375,11 @@ document.addEventListener("change", (e)=>{
 });
 
 
-/* ---------- LOGIN ---------- */
+/* ---------- LOGIN (contraseña por usuario, verificada contra Google Sheets) ---------- */
+const STORAGE_LOGIN_CACHE = "ubicaciones_login_cache_v1";
+const USUARIO_ADMIN = "JCAYCHO";
+let cambioPinDisponible = false;
+
 document.getElementById("keypad").addEventListener("click",(e)=>{
   const k = e.target.dataset.k;
   if(!k) return;
@@ -387,16 +393,48 @@ function renderPin(){
     s.classList.toggle("filled", i < currentPin.length);
   });
 }
-function tryLogin(){
+function loadLoginCache(){ return JSON.parse(localStorage.getItem(STORAGE_LOGIN_CACHE) || "{}"); }
+function saveLoginCache(c){ localStorage.setItem(STORAGE_LOGIN_CACHE, JSON.stringify(c)); }
+
+async function tryLogin(){
   const user = document.getElementById("loginUser").value;
   if(!user){ showToast("Selecciona tu nombre"); currentPin=""; renderPin(); return; }
-  if(currentPin !== "1234"){ showToast("PIN incorrecto"); currentPin=""; renderPin(); return; }
+  if(SHEET_WEB_APP_URL.startsWith("PEGA_AQUI")){ showToast("Falta configurar la URL de Google Sheets"); currentPin=""; renderPin(); return; }
+  const pinIngresado = currentPin;
+  const cache = loadLoginCache();
+  try{
+    const resp = await fetch(SHEET_WEB_APP_URL + "?action=login&usuario=" + encodeURIComponent(user) + "&pin=" + encodeURIComponent(pinIngresado));
+    const data = await resp.json();
+    if(data.ok){
+      cache[user] = { pin: pinIngresado, cambioUsado: data.cambioUsado };
+      saveLoginCache(cache);
+      completarLogin(user, data.cambioUsado);
+    } else {
+      showToast(data.error || "PIN incorrecto"); currentPin=""; renderPin();
+    }
+  }catch(err){
+    // Sin conexión: solo entra si ya se validó antes en ESTE dispositivo con ese mismo PIN
+    if(cache[user] && cache[user].pin === pinIngresado){
+      completarLogin(user, cache[user].cambioUsado);
+    } else {
+      showToast("Sin conexión: necesitas señal para tu primer ingreso en este dispositivo");
+      currentPin=""; renderPin();
+    }
+  }
+}
+function completarLogin(user, cambioUsado){
   currentUser = user;
+  cambioPinDisponible = !cambioUsado;
   document.getElementById("capUser").textContent = user;
   document.getElementById("capDate").textContent = todayKey();
   renderProveedorSelect();
+  actualizarMenuUsuario();
   showScreen("screen-home");
   currentPin=""; renderPin();
+}
+function actualizarMenuUsuario(){
+  document.getElementById("menuCambiarPin").style.display = cambioPinDisponible ? "" : "none";
+  document.getElementById("menuAdminUsuarios").style.display = (currentUser === USUARIO_ADMIN) ? "" : "none";
 }
 function logout(){
   currentUser = null; currentPin=""; renderPin();
@@ -404,6 +442,62 @@ function logout(){
   closeMenu();
   showScreen("screen-login");
 }
+
+/* ---------- CAMBIO DE CONTRASEÑA (propia, una sola vez) ---------- */
+document.getElementById("menuCambiarPin").addEventListener("click", async ()=>{
+  closeMenu();
+  if(!cambioPinDisponible){ showToast("Ya usaste tu cambio de contraseña único"); return; }
+  const actual = prompt("Ingresa tu contraseña ACTUAL (4 dígitos):");
+  if(actual === null) return;
+  const nueva = prompt("Ingresa tu contraseña NUEVA (4 dígitos):");
+  if(nueva === null) return;
+  if(!/^\d{4}$/.test(nueva)){ showToast("La nueva contraseña debe ser de 4 dígitos"); return; }
+  const confirmacion = prompt("Confirma tu contraseña NUEVA:");
+  if(confirmacion !== nueva){ showToast("No coinciden, inténtalo de nuevo"); return; }
+  try{
+    const resp = await fetch(SHEET_WEB_APP_URL, {
+      method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({ cambioPin: { usuario: currentUser, pinActual: actual.trim(), pinNuevo: nueva } })
+    });
+    const data = await resp.json();
+    if(data.ok){
+      const cache = loadLoginCache();
+      cache[currentUser] = { pin: nueva, cambioUsado: true };
+      saveLoginCache(cache);
+      cambioPinDisponible = false;
+      actualizarMenuUsuario();
+      showToast("Contraseña actualizada. Úsala la próxima vez que inicies sesión.");
+    } else {
+      showToast(data.error || "No se pudo cambiar la contraseña");
+    }
+  }catch(err){
+    showToast("Sin conexión, intenta más tarde");
+  }
+});
+
+/* ---------- GESTIÓN DE USUARIOS (solo JCAYCHO) ---------- */
+document.getElementById("menuAdminUsuarios").addEventListener("click", async ()=>{
+  closeMenu();
+  const listaUsuarios = ["JCAYCHO","DCARRANZA","LILACHI","JFAJARDO","SFAJARDO","RCARREÑO","RNORIEGA","JGUILLEN"];
+  const elegido = prompt("¿A qué usuario le quieres cambiar la contraseña?\nEscribe el nombre exacto: " + listaUsuarios.join(", "));
+  if(!elegido) return;
+  const usuarioObjetivo = elegido.trim().toUpperCase();
+  if(!listaUsuarios.includes(usuarioObjetivo)){ showToast("Ese usuario no existe"); return; }
+  const nueva = prompt("Nueva contraseña (4 dígitos) para " + usuarioObjetivo + ":");
+  if(!nueva) return;
+  if(!/^\d{4}$/.test(nueva)){ showToast("Debe ser de 4 dígitos"); return; }
+  try{
+    const resp = await fetch(SHEET_WEB_APP_URL, {
+      method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({ cambioPinAdmin: { solicitante: currentUser, usuarioObjetivo, pinNuevo: nueva } })
+    });
+    const data = await resp.json();
+    if(data.ok) showToast("Contraseña de " + usuarioObjetivo + " actualizada");
+    else showToast(data.error || "No se pudo cambiar");
+  }catch(err){
+    showToast("Sin conexión, intenta más tarde");
+  }
+});
 
 /* ---------- MENÚ ---------- */
 function openMenu(){ document.getElementById("menuOverlay").classList.add("open"); }
