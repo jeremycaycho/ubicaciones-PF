@@ -78,6 +78,7 @@
   .estado-pill{padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700;}
   .estado-pill.verde{background:var(--verde-bg); color:var(--verde);}
   .estado-pill.rojo{background:var(--rojo-bg); color:var(--rojo);}
+  .estado-pill.amarillo{background:#3f3210; color:#eab308;}
 
   .sync-stats{display:flex; gap:10px;}
   .sync-stat{flex:1; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 8px; text-align:center;}
@@ -115,6 +116,7 @@
         <option>SFAJARDO</option>
         <option>RCARREÑO</option>
         <option>RNORIEGA</option>
+        <option>JGUILLEN</option>
       </select>
       <div class="pin-dots" id="pinDots">
         <span></span><span></span><span></span><span></span>
@@ -228,6 +230,7 @@
     <div class="sync-stats">
       <div class="sync-stat"><div class="num" id="syncTotal">0</div><div class="lbl">Total</div></div>
       <div class="sync-stat"><div class="num" id="syncIngresado" style="color:var(--verde);">0</div><div class="lbl">Ingresado</div></div>
+      <div class="sync-stat"><div class="num" id="syncCorregir" style="color:#eab308;">0</div><div class="lbl">Corregir lote</div></div>
       <div class="sync-stat"><div class="num" id="syncPendiente" style="color:var(--rojo);">0</div><div class="lbl">Pendiente</div></div>
     </div>
     <div class="info-box">
@@ -288,6 +291,11 @@ function parseFechaKey(fk){
   return new Date(y,m-1,d).getTime();
 }
 function anioActualCorto(){ return new Date().getFullYear() % 100; }
+function estadoInfo(estado){
+  if(estado === "ingresado") return {clase:"verde", texto:"Ingresado"};
+  if(estado === "corregir_lote") return {clase:"amarillo", texto:"Corregir lote"};
+  return {clase:"rojo", texto:"No ingresado"};
+}
 
 /* ---------- LOGIN ---------- */
 document.getElementById("keypad").addEventListener("click",(e)=>{
@@ -349,6 +357,7 @@ document.getElementById("backFromSync").addEventListener("click", ()=> showScree
 /* ---------- PROVEEDORES: gestión dinámica (siempre en MAYÚSCULAS) ---------- */
 function renderProveedorSelect(){
   const sel = document.getElementById("capProveedor");
+  const valorPrevio = sel.value; // se pierde al reconstruir el <select>, lo guardamos para restaurarlo
   const provs = loadProveedores();
   sel.innerHTML = "";
   if(provs.length === 0){
@@ -364,6 +373,11 @@ function renderProveedorSelect(){
   const optAdd = document.createElement("option");
   optAdd.value = "__add__"; optAdd.textContent = "➕ Agregar nuevo proveedor";
   sel.appendChild(optAdd);
+  // Si el proveedor que estaba elegido sigue existiendo, lo dejamos seleccionado
+  // (así una sincronización en segundo plano no te borra lo que ya elegiste en el formulario)
+  if(valorPrevio && provs.includes(valorPrevio)){
+    sel.value = valorPrevio;
+  }
 }
 document.getElementById("capProveedor").addEventListener("change", (e)=>{
   if(e.target.value === "__add__"){
@@ -513,13 +527,12 @@ function openTabla(prov){
   body.innerHTML = "";
   document.getElementById("tablaEmpty").style.display = rows.length ? "none" : "block";
   rows.forEach(r=>{
-    const estClass = r.estado==="ingresado" ? "verde" : "rojo";
-    const estTxt = r.estado==="ingresado" ? "Ingresado" : "No ingresado";
+    const est = estadoInfo(r.estado);
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${r.codigo}</td><td>${r.lote}</td><td>${r.vcto}</td><td>${r.cantidad}</td>
       <td>${r.ubicacion}</td><td>${r.fechaKey}</td><td>${r.usuario}</td>
-      <td><span class="estado-pill ${estClass}">${estTxt}</span></td>`;
+      <td><span class="estado-pill ${est.clase}">${est.texto}</span></td>`;
     body.appendChild(tr);
   });
   showScreen("screen-tabla");
@@ -553,11 +566,10 @@ function openHistorialDetalle(fk){
   cont.innerHTML = proveedores.map(prov=>{
     const provRows = rowsFecha.filter(r=>r.proveedor===prov);
     const rowsHtml = provRows.map(r=>{
-      const estClass = r.estado==="ingresado" ? "verde" : "rojo";
-      const estTxt = r.estado==="ingresado" ? "Ingresado" : "No ingresado";
+      const est = estadoInfo(r.estado);
       return `<tr>
         <td>${r.codigo}</td><td>${r.lote}</td><td>${r.vcto}</td><td>${r.cantidad}</td>
-        <td>${r.ubicacion}</td><td>${r.usuario}</td><td><span class="estado-pill ${estClass}">${estTxt}</span></td>
+        <td>${r.ubicacion}</td><td>${r.usuario}</td><td><span class="estado-pill ${est.clase}">${est.texto}</span></td>
       </tr>`;
     }).join("");
     return `
@@ -581,9 +593,11 @@ function renderSyncScreen(){
   const rows = misRows();
   const total = rows.length;
   const ingresado = rows.filter(r=>r.estado==="ingresado").length;
+  const corregir = rows.filter(r=>r.estado==="corregir_lote").length;
   document.getElementById("syncTotal").textContent = total;
   document.getElementById("syncIngresado").textContent = ingresado;
-  document.getElementById("syncPendiente").textContent = total - ingresado;
+  document.getElementById("syncCorregir").textContent = corregir;
+  document.getElementById("syncPendiente").textContent = total - ingresado - corregir;
   document.getElementById("syncLast").textContent = lastSyncAt
     ? "Última sincronización: " + lastSyncAt
     : "Aún no se ha sincronizado.";
@@ -630,7 +644,7 @@ async function pullTodos(){
       proveedor: s.proveedor, codigo: s.codigo, lote: s.lote, vcto: s.vcto,
       cantidad: s.cantidad, ubicacion: s.ubicacion, usuario: s.usuario,
       fechaKey: s.fecha, hora: s.hora,
-      estado: s.estado === "Ingresado" ? "ingresado" : "no_ingresado",
+      estado: s.estado === "Ingresado" ? "ingresado" : (s.estado === "Corregir lote" ? "corregir_lote" : "no_ingresado"),
       sincronizado: true
     }));
 
