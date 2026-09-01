@@ -75,6 +75,18 @@
   .table-scroll::-webkit-scrollbar{height:4px;}
   .table-scroll::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
 
+  .cell-input{background:transparent; border:1px solid transparent; color:var(--text); font-size:12px; padding:4px 5px; border-radius:6px; width:100%; min-width:64px; font-family:inherit;}
+  .cell-input:focus{outline:none; border-color:var(--accent); background:var(--card2);}
+  .cell-input.cell-sm{min-width:44px;}
+
+  .hist-prov-block{margin-bottom:10px;}
+  .hist-prov-header{width:100%; display:flex; justify-content:space-between; align-items:center; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:12px 14px; color:var(--text); font-size:13.5px; font-weight:600; cursor:pointer;}
+  .hist-prov-header:active{background:var(--card2);}
+  .hist-prov-header .meta-right{font-weight:400; color:var(--muted); font-size:12px; display:flex; align-items:center; gap:6px;}
+  .hist-prov-header .chevron{font-size:11px;}
+  .accordion-body{display:none; margin-top:8px;}
+  .accordion-body.open{display:block;}
+
   .estado-pill{padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:700;}
   .estado-pill.verde{background:var(--verde-bg); color:var(--verde);}
   .estado-pill.rojo{background:var(--rojo-bg); color:var(--rojo);}
@@ -291,11 +303,75 @@ function parseFechaKey(fk){
   return new Date(y,m-1,d).getTime();
 }
 function anioActualCorto(){ return new Date().getFullYear() % 100; }
+// Por si alguna fila quedó guardada con formato ISO (ej. "2026-08-31T05:00:00.000Z")
+// en vez de texto normal, la convertimos de vuelta a algo legible.
+function textoSeguro(valor, tipo){
+  if(typeof valor === "string" && /^\d{4}-\d{2}-\d{2}T/.test(valor)){
+    const d = new Date(valor);
+    if(isNaN(d.getTime())) return valor;
+    const dd = String(d.getUTCDate()).padStart(2,"0");
+    const mm = String(d.getUTCMonth()+1).padStart(2,"0");
+    const yyyy = d.getUTCFullYear();
+    if(tipo === "hora") return String(d.getUTCHours()).padStart(2,"0")+":"+String(d.getUTCMinutes()).padStart(2,"0");
+    if(tipo === "vcto") return mm+"-"+String(yyyy).slice(-2);
+    return dd+"-"+mm+"-"+yyyy;
+  }
+  return valor;
+}
 function estadoInfo(estado){
   if(estado === "ingresado") return {clase:"verde", texto:"Ingresado"};
   if(estado === "corregir_lote") return {clase:"amarillo", texto:"Corregir lote"};
   return {clase:"rojo", texto:"No ingresado"};
 }
+function escAttr(v){
+  return String(v==null?"":v).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+}
+// Fila con campos editables (Código, Lote, Vcto, Cantidad, Ubicación) para corregir
+// errores de captura directamente desde la app. mostrarFecha se usa en la pantalla
+// de Proveedores, donde conviene ver la fecha de cada fila (en Historial ya está agrupado por fecha).
+function filaEditableTr(r, mostrarFecha){
+  const est = estadoInfo(r.estado);
+  const celdaFecha = mostrarFecha ? `<td>${r.fechaKey}</td>` : "";
+  return `<tr>
+    <td><input class="cell-input" data-id="${r.id}" data-campo="codigo" value="${escAttr(r.codigo)}" inputmode="numeric"></td>
+    <td><input class="cell-input" data-id="${r.id}" data-campo="lote" value="${escAttr(r.lote)}"></td>
+    <td><input class="cell-input cell-sm" data-id="${r.id}" data-campo="vcto" value="${escAttr(r.vcto)}"></td>
+    <td><input class="cell-input cell-sm" data-id="${r.id}" data-campo="cantidad" value="${escAttr(r.cantidad)}" inputmode="numeric"></td>
+    <td><input class="cell-input" data-id="${r.id}" data-campo="ubicacion" value="${escAttr(r.ubicacion)}"></td>
+    ${celdaFecha}
+    <td>${r.usuario}</td>
+    <td><span class="estado-pill ${est.clase}">${est.texto}</span></td>
+  </tr>`;
+}
+// Guarda un cambio hecho en un campo editable: lo actualiza localmente al instante
+// y lo manda a Google Sheets (si la fila ya estaba sincronizada, se marca para reenviar).
+function editarCampoLocal(id, campo, valor){
+  const rows = loadRows();
+  let cambio = false;
+  const actualizado = rows.map(r=>{
+    if(String(r.id) !== String(id)) return r;
+    const valorFinal = campo === "cantidad" ? Number(valor||0) : valor;
+    if(String(r[campo]) === String(valorFinal)) return r;
+    cambio = true;
+    const nuevo = {...r, [campo]: valorFinal};
+    if(r.sincronizado) nuevo.edicionPendiente = true;
+    return nuevo;
+  });
+  if(cambio){
+    saveRows(actualizado);
+    showToast("Cambio guardado");
+    syncAll();
+  }
+}
+document.addEventListener("change", (e)=>{
+  if(!e.target.classList || !e.target.classList.contains("cell-input")) return;
+  const campo = e.target.dataset.campo;
+  let valor = e.target.value.trim();
+  if(campo === "lote" || campo === "ubicacion") valor = valor.toUpperCase();
+  if(campo === "cantidad") valor = valor.replace(/[^0-9]/g,"");
+  editarCampoLocal(e.target.dataset.id, campo, valor);
+});
+
 
 /* ---------- LOGIN ---------- */
 document.getElementById("keypad").addEventListener("click",(e)=>{
@@ -524,17 +600,8 @@ function openTabla(prov){
   const rows = misRows().filter(r=>r.proveedor===prov)
     .sort((a,b)=> parseFechaKey(b.fechaKey) - parseFechaKey(a.fechaKey));
   const body = document.getElementById("tablaBody");
-  body.innerHTML = "";
+  body.innerHTML = rows.map(r=> filaEditableTr(r, true)).join("");
   document.getElementById("tablaEmpty").style.display = rows.length ? "none" : "block";
-  rows.forEach(r=>{
-    const est = estadoInfo(r.estado);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${r.codigo}</td><td>${r.lote}</td><td>${r.vcto}</td><td>${r.cantidad}</td>
-      <td>${r.ubicacion}</td><td>${r.fechaKey}</td><td>${r.usuario}</td>
-      <td><span class="estado-pill ${est.clase}">${est.texto}</span></td>`;
-    body.appendChild(tr);
-  });
   showScreen("screen-tabla");
 }
 
@@ -551,41 +618,57 @@ function renderHistorial(){
   }
   fechas.forEach(fk=>{
     const rowsFecha = rows.filter(r=>r.fechaKey===fk);
+    const cantProv = new Set(rowsFecha.map(r=>r.proveedor)).size;
+    const texto = cantProv === 1 ? "1 proveedor" : `${cantProv} proveedores`;
     const card = document.createElement("div");
     card.className = "prov-card";
-    card.innerHTML = `<div class="name">${fk}</div><div class="meta"><span>${rowsFecha.length} filas</span><span>›</span></div>`;
+    card.innerHTML = `<div class="name">${fk}</div><div class="meta"><span>${texto}</span><span>›</span></div>`;
     card.addEventListener("click", ()=> openHistorialDetalle(fk));
     cont.appendChild(card);
   });
 }
+let histDetalleFecha = null;
+let histDetalleAbiertos = new Set();
 function openHistorialDetalle(fk){
   document.getElementById("histDetalleTitle").textContent = fk;
-  const rowsFecha = misRows().filter(r=>r.fechaKey===fk);
+  histDetalleFecha = fk;
+  histDetalleAbiertos = new Set();
+  renderHistorialDetalleBody();
+  showScreen("screen-historial-detalle");
+}
+function renderHistorialDetalleBody(){
+  if(!histDetalleFecha) return;
+  const rowsFecha = misRows().filter(r=>r.fechaKey===histDetalleFecha);
   const proveedores = [...new Set(rowsFecha.map(r=>r.proveedor))];
   const cont = document.getElementById("histDetalleBody");
   cont.innerHTML = proveedores.map(prov=>{
     const provRows = rowsFecha.filter(r=>r.proveedor===prov);
-    const rowsHtml = provRows.map(r=>{
-      const est = estadoInfo(r.estado);
-      return `<tr>
-        <td>${r.codigo}</td><td>${r.lote}</td><td>${r.vcto}</td><td>${r.cantidad}</td>
-        <td>${r.ubicacion}</td><td>${r.usuario}</td><td><span class="estado-pill ${est.clase}">${est.texto}</span></td>
-      </tr>`;
-    }).join("");
+    const abierto = histDetalleAbiertos.has(prov);
+    const rowsHtml = provRows.map(r=> filaEditableTr(r, false)).join("");
     return `
-      <div style="margin-bottom:14px;">
-        <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;">
-          <b>${prov}</b><span style="color:var(--muted);">${provRows.length} filas</span>
-        </div>
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>Código</th><th>Lote</th><th>Vcto</th><th>Cant.</th><th>Ubicación</th><th>Usuario</th><th>Estado</th></tr></thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
+      <div class="hist-prov-block">
+        <button class="hist-prov-header" data-prov="${escAttr(prov)}">
+          <span>${prov}</span>
+          <span class="meta-right">${provRows.length} filas <span class="chevron">${abierto ? "︿" : "﹀"}</span></span>
+        </button>
+        <div class="accordion-body ${abierto ? "open" : ""}">
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Código</th><th>Lote</th><th>Vcto</th><th>Cant.</th><th>Ubicación</th><th>Usuario</th><th>Estado</th></tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
         </div>
       </div>`;
   }).join("");
-  showScreen("screen-historial-detalle");
+  cont.querySelectorAll(".hist-prov-header").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const prov = btn.dataset.prov;
+      if(histDetalleAbiertos.has(prov)) histDetalleAbiertos.delete(prov);
+      else histDetalleAbiertos.add(prov);
+      renderHistorialDetalleBody();
+    });
+  });
 }
 
 /* ---------- SINCRONIZACIÓN: 100% AUTOMÁTICA, sin botones (estadísticas de MI usuario) ---------- */
@@ -626,6 +709,25 @@ async function pushPendientes(){
   return { ...data, enviados: pendientes.length };
 }
 
+// Envía a Google Sheets las correcciones hechas a filas que ya estaban guardadas
+// (código, lote, vencimiento, cantidad o ubicación editados desde la app).
+async function pushEdiciones(){
+  const rows = loadRows();
+  const pendientes = rows.filter(r=>r.edicionPendiente);
+  if(pendientes.length === 0) return;
+  const idsEnviados = new Set(pendientes.map(r=>r.id));
+  const resp = await fetch(SHEET_WEB_APP_URL, {
+    method: "POST",
+    headers: {"Content-Type": "text/plain;charset=utf-8"},
+    body: JSON.stringify({ actualizaciones: pendientes.map(r=>({
+      id:r.id, proveedor:r.proveedor, codigo:r.codigo, lote:r.lote, vcto:r.vcto,
+      cantidad:r.cantidad, ubicacion:r.ubicacion
+    })) })
+  });
+  saveRows(loadRows().map(r=> idsEnviados.has(r.id) ? {...r, edicionPendiente:false} : r));
+  try{ await resp.json(); }catch(_e){ /* respuesta no legible: la edición ya se guardó igual */ }
+}
+
 // Trae TODO lo que hay guardado en Google Sheets (sin importar desde qué dispositivo se
 // haya ingresado) y lo combina con lo que este dispositivo todavía no alcanzó a enviar.
 // Así cualquier celular o laptop que abra la app ve lo mismo, siempre.
@@ -641,9 +743,9 @@ async function pullTodos(){
     .filter(s => !idsPendientes.has(String(s.id))) // evita duplicar una fila que este mismo dispositivo recién creó
     .map(s => ({
       id: s.id,
-      proveedor: s.proveedor, codigo: s.codigo, lote: s.lote, vcto: s.vcto,
+      proveedor: s.proveedor, codigo: s.codigo, lote: s.lote, vcto: textoSeguro(s.vcto,"vcto"),
       cantidad: s.cantidad, ubicacion: s.ubicacion, usuario: s.usuario,
-      fechaKey: s.fecha, hora: s.hora,
+      fechaKey: textoSeguro(s.fecha,"fecha"), hora: textoSeguro(s.hora,"hora"),
       estado: s.estado === "Ingresado" ? "ingresado" : (s.estado === "Corregir lote" ? "corregir_lote" : "no_ingresado"),
       sincronizado: true
     }));
@@ -665,12 +767,14 @@ async function syncAll(){
   syncEnCurso = true;
   try{
     await pushPendientes();
+    await pushEdiciones();
     await pullTodos();
     lastSyncAt = todayKey() + " " + nowTimeStr();
     // refresca la pantalla visible si corresponde, para que el cambio se vea al instante
     if(document.getElementById("screen-sync").classList.contains("active")) renderSyncScreen();
     if(document.getElementById("screen-proveedores").classList.contains("active")) renderProveedores();
     if(document.getElementById("screen-historial").classList.contains("active")) renderHistorial();
+    if(document.getElementById("screen-historial-detalle").classList.contains("active")) renderHistorialDetalleBody();
     if(document.getElementById("screen-tabla").classList.contains("active")){
       openTabla(document.getElementById("tablaTitle").textContent);
     }
