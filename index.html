@@ -202,6 +202,7 @@
     <div class="field">
       <label>Proveedor</label>
       <select id="capProveedor"></select>
+      <input type="text" id="capProveedorManual" placeholder="Escribe el nombre del proveedor" style="display:none; margin-top:8px;">
     </div>
     <div class="field">
       <label>Código</label>
@@ -337,7 +338,7 @@
 
 <script>
 /* ======= CONFIGURACIÓN: pega aquí la URL de tu Web App de Google Apps Script ======= */
-const SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwCni3M9RSjvo59vuaNLqlyZVf81ld9DNN0Qvth3UnG-4lmZPkkuZltO6GPqc-w9PZjKw/exec";
+const SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzgcg6BOnFlI4dh-RNorLExgFeBYiwX2YE-gEjWQvz8TBlnmwDwKxTa0VVNnJrb33yo/exec";
 /* ==================================================================================== */
 
 const STORAGE_ROWS = "ubicaciones_registros_v4";
@@ -606,15 +607,19 @@ document.getElementById("backFromHistDetalle").addEventListener("click", ()=>{ r
 document.getElementById("backFromHistTabla").addEventListener("click", ()=>{ renderHistorialDetalleBody(); showScreen("screen-historial-detalle"); });
 document.getElementById("backFromSync").addEventListener("click", ()=> showScreen("screen-home"));
 
-/* ---------- PROVEEDORES: gestión dinámica (siempre en MAYÚSCULAS) ---------- */
+/* ---------- PROVEEDORES: lista oficial que viene de Google Sheets (hoja "Proveedores") ---------- */
 function renderProveedorSelect(){
   const sel = document.getElementById("capProveedor");
   const valorPrevio = sel.value; // se pierde al reconstruir el <select>, lo guardamos para restaurarlo
   const provs = loadProveedores();
   sel.innerHTML = "";
+  // Respaldo arriba de todo: por si el proveedor todavía no está en la lista oficial de Sheets
+  const optManual = document.createElement("option");
+  optManual.value = "__manual__"; optManual.textContent = "✍️ Ingresar proveedor";
+  sel.appendChild(optManual);
   if(provs.length === 0){
     const opt = document.createElement("option");
-    opt.value=""; opt.textContent="-- Sin proveedores, agrega uno --";
+    opt.value=""; opt.textContent="-- Sin proveedores cargados aún --";
     sel.appendChild(opt);
   }
   provs.forEach(p=>{
@@ -622,31 +627,18 @@ function renderProveedorSelect(){
     opt.value = p; opt.textContent = p;
     sel.appendChild(opt);
   });
-  const optAdd = document.createElement("option");
-  optAdd.value = "__add__"; optAdd.textContent = "➕ Agregar nuevo proveedor";
-  sel.appendChild(optAdd);
   // Si el proveedor que estaba elegido sigue existiendo, lo dejamos seleccionado
   // (así una sincronización en segundo plano no te borra lo que ya elegiste en el formulario)
-  if(valorPrevio && provs.includes(valorPrevio)){
+  if(valorPrevio && (provs.includes(valorPrevio) || valorPrevio === "__manual__")){
     sel.value = valorPrevio;
   }
+  document.getElementById("capProveedorManual").style.display = (sel.value === "__manual__") ? "" : "none";
 }
 document.getElementById("capProveedor").addEventListener("change", (e)=>{
-  if(e.target.value === "__add__"){
-    const nombre = prompt("Nombre del nuevo proveedor:");
-    if(nombre && nombre.trim()){
-      const limpio = nombre.trim().toUpperCase();
-      const provs = loadProveedores();
-      if(!provs.includes(limpio)){
-        provs.push(limpio);
-        saveProveedores(provs);
-      }
-      renderProveedorSelect();
-      document.getElementById("capProveedor").value = limpio;
-    } else {
-      renderProveedorSelect();
-    }
-  }
+  document.getElementById("capProveedorManual").style.display = (e.target.value === "__manual__") ? "" : "none";
+});
+document.getElementById("capProveedorManual").addEventListener("input", (e)=>{
+  e.target.value = e.target.value.toUpperCase();
 });
 
 /* ---------- FORMATO Y VALIDACIÓN DE CAMPOS ---------- */
@@ -716,7 +708,10 @@ function modoUbicacionActual(){
 
 /* ---------- GUARDAR FILA ---------- */
 document.getElementById("btnSaveRow").addEventListener("click", ()=>{
-  const proveedor = document.getElementById("capProveedor").value;
+  const selProveedor = document.getElementById("capProveedor").value;
+  const proveedor = selProveedor === "__manual__"
+    ? document.getElementById("capProveedorManual").value.trim().toUpperCase()
+    : selProveedor;
   const codigo = document.getElementById("capCodigo").value.trim();
   const lote = document.getElementById("capLote").value.trim();
   const mm = capMM.value;
@@ -726,7 +721,7 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   const ubic1 = capUbic1.value;
   const ubic2 = capUbic2.value;
 
-  if(!proveedor || proveedor==="__add__"){ showToast("Selecciona o agrega un proveedor"); return; }
+  if(!proveedor){ showToast("Selecciona un proveedor"); return; }
   if(!codigo || !cantidad){
     showToast("Completa código y cantidad");
     return;
@@ -760,7 +755,11 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   });
   saveRows(rows);
 
-  ["capCodigo","capLote","capMM","capAA","capCantidad","capUbic1","capUbic2"].forEach(id=>document.getElementById(id).value="");
+  ["capCodigo","capLote","capMM","capAA","capCantidad","capUbic1","capUbic2","capProveedorManual"].forEach(id=>document.getElementById(id).value="");
+  if(selProveedor === "__manual__"){
+    document.getElementById("capProveedor").selectedIndex = 0;
+  }
+  document.getElementById("capProveedorManual").style.display = "none";
   document.querySelector('input[name="modoUbic"][value="ubicacion"]').checked = true;
   document.getElementById("ubicacionCampos").style.display = "flex";
   showToast("Fila guardada");
@@ -953,11 +952,16 @@ async function pullTodos(){
     }));
 
   saveRows([...pendientesLocales, ...desdeServidor]);
+}
 
-  // La lista de proveedores también se comparte entre dispositivos
-  const provsServidor = [...new Set(data.filas.map(f => f.proveedor).filter(Boolean))];
-  const union = [...new Set([...loadProveedores(), ...provsServidor])].sort();
-  saveProveedores(union);
+// Trae la lista OFICIAL de proveedores (hoja "Proveedores", columna FAMILIA) y reemplaza
+// por completo la lista local -- ya no se arma sola desde las filas ni se puede agregar
+// a mano, viene siempre de Google Sheets.
+async function pullProveedores(){
+  const resp = await fetch(SHEET_WEB_APP_URL + "?action=proveedores");
+  const data = await resp.json();
+  if(!data.ok || !data.proveedores) return;
+  saveProveedores(data.proveedores);
   if(document.getElementById("screen-home").classList.contains("active")) renderProveedorSelect();
 }
 
@@ -971,6 +975,7 @@ async function syncAll(){
     await pushPendientes();
     await pushEdiciones();
     await pullTodos();
+    await pullProveedores();
     lastSyncAt = todayKey() + " " + nowTimeStr();
     // refresca la pantalla visible si corresponde, para que el cambio se vea al instante
     if(document.getElementById("screen-sync").classList.contains("active")) renderSyncScreen();
