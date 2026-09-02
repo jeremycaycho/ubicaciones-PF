@@ -47,6 +47,9 @@
   .split-row span{color:var(--muted); font-weight:600;}
   .split-row .w-sm{width:64px; flex:none;}
   .split-row .w-lg{width:84px; flex:none;}
+  .radio-row{display:flex; gap:18px; margin-bottom:10px;}
+  .radio-opt{display:flex; align-items:center; gap:6px; font-size:13.5px; color:var(--text); cursor:pointer;}
+  .radio-opt input{accent-color:var(--accent); width:16px; height:16px;}
   .btn{width:100%; padding:13px; border-radius:10px; border:1px solid var(--border); background:var(--card2); color:var(--text); font-size:15px; font-weight:600;}
   .btn:active{background:var(--border);}
   .btn-accent{background:var(--accent); border-color:var(--accent); color:#fff;}
@@ -177,7 +180,11 @@
     </div>
     <div class="field">
       <label>Ubicación</label>
-      <div class="split-row">
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="modoUbic" value="ubicacion" checked> Ubicación</label>
+        <label class="radio-opt"><input type="radio" name="modoUbic" value="mod"> MOD</label>
+      </div>
+      <div class="split-row" id="ubicacionCampos">
         <input type="text" id="capUbic1" class="w-lg" placeholder="0000" maxlength="4">
         <span>-</span>
         <input type="text" id="capUbic2" class="w-sm" placeholder="XX" maxlength="2">
@@ -619,6 +626,19 @@ capUbic2.addEventListener("input", ()=>{
   capUbic2.value = capUbic2.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,2);
 });
 
+// Selector Ubicación / MOD: si eligen MOD, se ocultan los campos físicos (no hace falta llenar nada)
+document.querySelectorAll('input[name="modoUbic"]').forEach(r=>{
+  r.addEventListener("change", (e)=>{
+    const esMod = e.target.value === "mod";
+    document.getElementById("ubicacionCampos").style.display = esMod ? "none" : "flex";
+    if(esMod){ capUbic1.value = ""; capUbic2.value = ""; }
+  });
+});
+function modoUbicacionActual(){
+  const sel = document.querySelector('input[name="modoUbic"]:checked');
+  return sel ? sel.value : "ubicacion";
+}
+
 /* ---------- GUARDAR FILA ---------- */
 document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   const proveedor = document.getElementById("capProveedor").value;
@@ -627,24 +647,34 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   const mm = capMM.value;
   const aa = capAA.value;
   const cantidad = document.getElementById("capCantidad").value;
+  const esMod = modoUbicacionActual() === "mod";
   const ubic1 = capUbic1.value;
   const ubic2 = capUbic2.value;
 
   if(!proveedor || proveedor==="__add__"){ showToast("Selecciona o agrega un proveedor"); return; }
-  if(!codigo || !cantidad || !ubic1 || !ubic2){
-    showToast("Completa código, cantidad y ubicación completa");
+  if(!codigo || !cantidad){
+    showToast("Completa código y cantidad");
     return;
   }
-  if(ubic1.length !== 4 || ubic2.length !== 2){
-    showToast("La ubicación debe ser 4 caracteres - 2 caracteres");
-    return;
+  let ubicacion;
+  if(esMod){
+    ubicacion = "MOD";
+  } else {
+    if(!ubic1 || !ubic2){
+      showToast("Completa la ubicación completa");
+      return;
+    }
+    if(ubic1.length !== 4 || ubic2.length !== 2){
+      showToast("La ubicación debe ser 4 caracteres - 2 caracteres");
+      return;
+    }
+    ubicacion = ubic1 + "-" + ubic2;
   }
   if(!mm || !aa){
     showToast("Completa mes y año de vencimiento (valores válidos)");
     return;
   }
   const vcto = mm + "-" + aa;
-  const ubicacion = ubic1 + "-" + ubic2;
 
   const rows = loadRows();
   rows.push({
@@ -656,6 +686,8 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   saveRows(rows);
 
   ["capCodigo","capLote","capMM","capAA","capCantidad","capUbic1","capUbic2"].forEach(id=>document.getElementById(id).value="");
+  document.querySelector('input[name="modoUbic"][value="ubicacion"]').checked = true;
+  document.getElementById("ubicacionCampos").style.display = "flex";
   showToast("Fila guardada");
   syncAll(); // se envía sola a Google Sheets al instante, sin botones
 });
