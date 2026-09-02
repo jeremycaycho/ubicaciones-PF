@@ -17,6 +17,11 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   body{margin:0; font-family:'Segoe UI',Roboto,Arial,sans-serif; background:var(--bg); color:var(--text);}
   #app{max-width:420px; margin:0 auto; min-height:100vh; background:var(--bg); display:flex; flex-direction:column; padding:16px;}
+  /* Solo en las pantallas finales de tabla (Proveedores→Tabla e Historial→Tabla), al girar
+     el celular a horizontal se aprovecha todo el ancho para ver más columnas sin scroll. */
+  @media (orientation: landscape){
+    body.tabla-ancha #app{ max-width: 100%; }
+  }
   .screen{display:none; flex-direction:column; gap:14px;}
   .screen.active{display:flex;}
 
@@ -270,14 +275,29 @@
     <div class="cards" id="historialCards"></div>
   </div>
 
-  <!-- HISTORIAL: DETALLE DE UNA FECHA -->
+  <!-- HISTORIAL: DETALLE DE UNA FECHA (tarjetas de proveedor) -->
   <div class="screen" id="screen-historial-detalle">
     <div class="topbar">
       <span class="back" id="backFromHistDetalle">←</span>
       <h1 id="histDetalleTitle">Fecha</h1>
       <span style="width:20px;"></span>
     </div>
-    <div id="histDetalleBody"></div>
+    <div class="cards" id="histDetalleBody"></div>
+  </div>
+
+  <!-- HISTORIAL: TABLA DE UN PROVEEDOR EN UNA FECHA -->
+  <div class="screen" id="screen-historial-tabla">
+    <div class="topbar">
+      <span class="back" id="backFromHistTabla">←</span>
+      <h1 id="histTablaTitle">Proveedor</h1>
+      <span style="width:20px;"></span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Código</th><th>Lote</th><th>Vcto</th><th>Cant.</th><th>Ubicación</th><th>Usuario</th><th>Estado</th></tr></thead>
+        <tbody id="histTablaBody"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- SINCRONIZACIÓN (solo informativa, todo es automático) -->
@@ -327,9 +347,11 @@ let currentPin = "";
 let lastSyncAt = null;
 
 /* ---------- Utilidades ---------- */
+const PANTALLAS_TABLA_ANCHA = ["screen-tabla", "screen-historial-tabla"];
 function showScreen(id){
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
+  document.body.classList.toggle("tabla-ancha", PANTALLAS_TABLA_ANCHA.includes(id));
 }
 function showToast(msg){
   const t = document.getElementById("toast");
@@ -581,6 +603,7 @@ document.getElementById("backFromProveedores").addEventListener("click", ()=> sh
 document.getElementById("backFromTabla").addEventListener("click", ()=>{ renderProveedores(); showScreen("screen-proveedores"); });
 document.getElementById("backFromHistorial").addEventListener("click", ()=> showScreen("screen-home"));
 document.getElementById("backFromHistDetalle").addEventListener("click", ()=>{ renderHistorial(); showScreen("screen-historial"); });
+document.getElementById("backFromHistTabla").addEventListener("click", ()=>{ renderHistorialDetalleBody(); showScreen("screen-historial-detalle"); });
 document.getElementById("backFromSync").addEventListener("click", ()=> showScreen("screen-home"));
 
 /* ---------- PROVEEDORES: gestión dinámica (siempre en MAYÚSCULAS) ---------- */
@@ -783,7 +806,7 @@ function openTabla(prov){
   showScreen("screen-tabla");
 }
 
-/* ---------- HISTORIAL: LISTA DE FECHAS (tarjetas) + DETALLE EN OTRA PANTALLA ---------- */
+/* ---------- HISTORIAL: 1) fechas (tarjetas) → 2) proveedores de esa fecha (tarjetas) → 3) tabla ---------- */
 function renderHistorial(){
   const rows = misRows();
   const fechas = [...new Set(rows.map(r=>r.fechaKey))]
@@ -805,12 +828,14 @@ function renderHistorial(){
     cont.appendChild(card);
   });
 }
+
 let histDetalleFecha = null;
-let histDetalleAbiertos = new Set();
+let histTablaProveedor = null;
+
+// Pantalla 2: tarjetas con los proveedores que tuvieron registros esa fecha
 function openHistorialDetalle(fk){
-  document.getElementById("histDetalleTitle").textContent = fk;
   histDetalleFecha = fk;
-  histDetalleAbiertos = new Set();
+  document.getElementById("histDetalleTitle").textContent = fk;
   renderHistorialDetalleBody();
   showScreen("screen-historial-detalle");
 }
@@ -819,34 +844,33 @@ function renderHistorialDetalleBody(){
   const rowsFecha = misRows().filter(r=>r.fechaKey===histDetalleFecha);
   const proveedores = [...new Set(rowsFecha.map(r=>r.proveedor))];
   const cont = document.getElementById("histDetalleBody");
-  cont.innerHTML = proveedores.map(prov=>{
+  cont.innerHTML = "";
+  if(proveedores.length === 0){
+    cont.innerHTML = '<div class="empty-msg">Sin proveedores para esta fecha.</div>';
+    return;
+  }
+  proveedores.forEach(prov=>{
     const provRows = rowsFecha.filter(r=>r.proveedor===prov);
-    const abierto = histDetalleAbiertos.has(prov);
-    const rowsHtml = provRows.map(r=> filaEditableTr(r, false)).join("");
-    return `
-      <div class="hist-prov-block">
-        <button class="hist-prov-header" data-prov="${escAttr(prov)}">
-          <span>${prov}</span>
-          <span class="meta-right">${provRows.length} filas <span class="chevron">${abierto ? "︿" : "﹀"}</span></span>
-        </button>
-        <div class="accordion-body ${abierto ? "open" : ""}">
-          <div class="table-scroll">
-            <table>
-              <thead><tr><th>Código</th><th>Lote</th><th>Vcto</th><th>Cant.</th><th>Ubicación</th><th>Usuario</th><th>Estado</th></tr></thead>
-              <tbody>${rowsHtml}</tbody>
-            </table>
-          </div>
-        </div>
-      </div>`;
-  }).join("");
-  cont.querySelectorAll(".hist-prov-header").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      const prov = btn.dataset.prov;
-      if(histDetalleAbiertos.has(prov)) histDetalleAbiertos.delete(prov);
-      else histDetalleAbiertos.add(prov);
-      renderHistorialDetalleBody();
-    });
+    const card = document.createElement("div");
+    card.className = "prov-card";
+    card.innerHTML = `<div class="name">${prov}</div><div class="meta"><span>${provRows.length} filas</span><span>›</span></div>`;
+    card.addEventListener("click", ()=> openHistorialTabla(prov));
+    cont.appendChild(card);
   });
+}
+
+// Pantalla 3: tabla final con las filas de ese proveedor en esa fecha (esta es la que
+// se ensancha al girar el celular)
+function openHistorialTabla(prov){
+  histTablaProveedor = prov;
+  document.getElementById("histTablaTitle").textContent = prov + " · " + histDetalleFecha;
+  renderHistorialTablaBody();
+  showScreen("screen-historial-tabla");
+}
+function renderHistorialTablaBody(){
+  if(!histDetalleFecha || !histTablaProveedor) return;
+  const rows = misRows().filter(r=>r.fechaKey===histDetalleFecha && r.proveedor===histTablaProveedor);
+  document.getElementById("histTablaBody").innerHTML = rows.map(r=> filaEditableTr(r, false)).join("");
 }
 
 /* ---------- SINCRONIZACIÓN: 100% AUTOMÁTICA, sin botones (estadísticas de MI usuario) ---------- */
@@ -953,6 +977,7 @@ async function syncAll(){
     if(document.getElementById("screen-proveedores").classList.contains("active")) renderProveedores();
     if(document.getElementById("screen-historial").classList.contains("active")) renderHistorial();
     if(document.getElementById("screen-historial-detalle").classList.contains("active")) renderHistorialDetalleBody();
+    if(document.getElementById("screen-historial-tabla").classList.contains("active")) renderHistorialTablaBody();
     if(document.getElementById("screen-tabla").classList.contains("active")){
       openTabla(document.getElementById("tablaTitle").textContent);
     }
