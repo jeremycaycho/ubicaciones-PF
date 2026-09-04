@@ -947,7 +947,7 @@ async function pullTodos(){
       proveedor: s.proveedor, codigo: s.codigo, lote: s.lote, vcto: textoSeguro(s.vcto,"vcto"),
       cantidad: s.cantidad, ubicacion: s.ubicacion, usuario: s.usuario,
       fechaKey: textoSeguro(s.fecha,"fecha"), hora: textoSeguro(s.hora,"hora"),
-      estado: s.estado === "Ingresado" ? "ingresado" : (s.estado === "Corregir lote" ? "corregir_lote" : "no_ingresado"),
+      estado: String(s.estado||"").indexOf("Ingresado por") === 0 ? "ingresado" : (s.estado === "Corregir lote" ? "corregir_lote" : "no_ingresado"),
       sincronizado: true
     }));
 
