@@ -8,6 +8,9 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0b0b0d">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Swing&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#0b0b0d; --card:#18181b; --card2:#1f1f23; --border:#2e2e33;
@@ -47,6 +50,18 @@
   .field input, .field select{width:100%; padding:11px 12px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:15px;}
   .field input:focus, .field select:focus{outline:none; border-color:var(--accent);}
   .field .hint{font-size:11px; color:var(--muted); margin-top:4px;}
+  .descripcion-preview{
+    display:none;
+    margin-top:6px;
+    font-family:'Swing', cursive;
+    font-size:16px;
+    line-height:1.3;
+    color:var(--text);
+  }
+  .descripcion-preview.mostrar{display:block;}
+  .descripcion-preview.no-encontrado{
+    color:var(--rojo);
+  }
   .split-row{display:flex; align-items:center; gap:8px;}
   .split-row input{text-align:center;}
   .split-row span{color:var(--muted); font-weight:600;}
@@ -207,6 +222,7 @@
     <div class="field">
       <label>Código</label>
       <input type="text" id="capCodigo" placeholder="Digitar código" inputmode="numeric">
+      <div class="descripcion-preview" id="capDescripcionPreview"></div>
     </div>
     <div class="field">
       <label>Lote</label>
@@ -647,8 +663,35 @@ document.getElementById("capLote").addEventListener("input", (e)=>{
   e.target.value = e.target.value.toUpperCase();
 });
 // Código: solo dígitos
+let timerDescripcion = null;
 document.getElementById("capCodigo").addEventListener("input", (e)=>{
   e.target.value = e.target.value.replace(/[^0-9]/g,"");
+  const codigo = e.target.value.trim();
+  const caja = document.getElementById("capDescripcionPreview");
+  clearTimeout(timerDescripcion);
+  if(!codigo){
+    caja.classList.remove("mostrar","no-encontrado");
+    caja.textContent = "";
+    return;
+  }
+  // Espera un poco a que termine de digitar antes de consultar, para no saturar de pedidos
+  timerDescripcion = setTimeout(async ()=>{
+    if(SHEET_WEB_APP_URL.startsWith("PEGA_AQUI")) return;
+    try{
+      const resp = await fetch(SHEET_WEB_APP_URL + "?action=descripcion&codigo=" + encodeURIComponent(codigo));
+      const data = await resp.json();
+      // Si el usuario ya siguió escribiendo, esta respuesta quedó vieja: se ignora
+      if(document.getElementById("capCodigo").value.trim() !== codigo) return;
+      if(data.ok && data.descripcion && data.descripcion !== "No encontrado"){
+        caja.textContent = data.descripcion;
+        caja.classList.remove("no-encontrado");
+        caja.classList.add("mostrar");
+      } else {
+        caja.textContent = "Producto no encontrado en la lista";
+        caja.classList.add("mostrar","no-encontrado");
+      }
+    }catch(err){ /* sin conexión: simplemente no se muestra la descripción */ }
+  }, 150);
 });
 
 // Fecha de vencimiento: MM salta solo a AA, valida rangos
@@ -756,6 +799,8 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   saveRows(rows);
 
   ["capCodigo","capLote","capMM","capAA","capCantidad","capUbic1","capUbic2","capProveedorManual"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("capDescripcionPreview").classList.remove("mostrar","no-encontrado");
+  document.getElementById("capDescripcionPreview").textContent = "";
   if(selProveedor === "__manual__"){
     document.getElementById("capProveedor").selectedIndex = 0;
   }
