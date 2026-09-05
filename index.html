@@ -669,16 +669,89 @@ document.getElementById("capProveedorManual").addEventListener("input", (e)=>{
 document.getElementById("capLote").addEventListener("input", (e)=>{
   e.target.value = e.target.value.toUpperCase();
 });
-/* ---------- DESCRIPCIONES DE PRODUCTO: cachecita CHICA (no toda la lista, para no ocupar
-   memoria en equipos con poco espacio como el Honeywell). Solo recuerda los códigos que ya
-   se consultaron antes -- esos salen instantáneos; lo demás sigue consultando a Sheets
-   (que ya busca directo la celda, sin leer las 30 mil filas). ---------- */
-const STORAGE_DESC_CACHE = "ubicaciones_descripciones_lru_v1";
-const LIMITE_CACHE_DESCRIPCIONES = 150; // cuántos códigos distintos recuerda como máximo (pesa muy poco)
+/* ---------- DESCRIPCIONES DE PRODUCTO: IndexedDB + cachecita en memoria ----------
+   IndexedDB guarda TODO el catálogo (32 mil productos) en el propio dispositivo, pero
+   sin ocupar memoria RAM como haría un objeto JS gigante -- el navegador lo maneja como
+   un archivo indexado, y buscar ahí es cuestión de milisegundos, sin tocar internet.
+   La descarga se hace en BLOQUES CHICOS en segundo plano (no de una sola vez, para no
+   trabar un equipo con poco procesador como el Honeywell), y una vez descargado, las
+   búsquedas quedan prácticamente instantáneas de ahí en adelante. */
+const IDB_NOMBRE = "ubicaciones_catalogo_db";
+const IDB_TIENDA = "descripciones";
+const STORAGE_DESC_LISTO = "ubicaciones_descripciones_idb_listo_v1";
 
-// La cachecita se guarda en una variable de JS (no se vuelve a leer/parsear el
-// localStorage en cada tecla, eso era lo que iba lenteando la escritura en equipos
-// con poco procesador como el Honeywell). Solo se lee UNA vez al cargar la app.
+let idbConexion = null;
+function abrirIDB(){
+  if(idbConexion) return idbConexion;
+  idbConexion = new Promise((resolve, reject)=>{
+    if(!("indexedDB" in window)){ reject("sin IndexedDB"); return; }
+    const req = indexedDB.open(IDB_NOMBRE, 1);
+    req.onupgradeneeded = ()=>{
+      const db = req.result;
+      if(!db.objectStoreNames.contains(IDB_TIENDA)) db.createObjectStore(IDB_TIENDA, { keyPath: "codigo" });
+    };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+  return idbConexion;
+}
+async function buscarEnIDB(codigo){
+  try{
+    const db = await abrirIDB();
+    return await new Promise((resolve)=>{
+      const tx = db.transaction(IDB_TIENDA, "readonly");
+      const req = tx.objectStore(IDB_TIENDA).get(codigo);
+      req.onsuccess = ()=> resolve(req.result ? req.result.descripcion : undefined);
+      req.onerror = ()=> resolve(undefined);
+    });
+  }catch(e){ return undefined; }
+}
+async function guardarBloqueEnIDB(filas){
+  try{
+    const db = await abrirIDB();
+    await new Promise((resolve)=>{
+      const tx = db.transaction(IDB_TIENDA, "readwrite");
+      const tienda = tx.objectStore(IDB_TIENDA);
+      filas.forEach(f=>{
+        const codigo = String(f[0]||"").toUpperCase();
+        if(codigo) tienda.put({ codigo: codigo, descripcion: f[1] || "" });
+      });
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
+    });
+  }catch(e){ /* si falla, simplemente no se guardó ese bloque; se reintentará después */ }
+}
+// Descarga el catálogo completo en bloques de 3000, en segundo plano, sin bloquear nada.
+// Si ya se completó antes, no lo repite (se guarda una marca). Si se corta a la mitad
+// (se cierra la app, se va la señal), la próxima vez sigue desde donde se quedó.
+async function descargarCatalogoEnSegundoPlano(){
+  if(SHEET_WEB_APP_URL.startsWith("PEGA_AQUI")) return;
+  if(localStorage.getItem(STORAGE_DESC_LISTO) === "1") return;
+  let inicio = parseInt(localStorage.getItem(STORAGE_DESC_LISTO + "_inicio") || "0", 10) || 0;
+  try{
+    while(true){
+      const resp = await fetch(SHEET_WEB_APP_URL + "?action=descripcionesPagina&inicio=" + inicio + "&tamano=3000");
+      const data = await resp.json();
+      if(!data.ok) return;
+      if(data.filas && data.filas.length){
+        await guardarBloqueEnIDB(data.filas);
+        inicio += data.filas.length;
+        localStorage.setItem(STORAGE_DESC_LISTO + "_inicio", String(inicio));
+      }
+      if(data.fin){
+        localStorage.setItem(STORAGE_DESC_LISTO, "1");
+        return;
+      }
+      if(!data.filas || data.filas.length === 0) return; // por seguridad, evita loop infinito
+      await new Promise(r=>setTimeout(r, 300)); // pequeña pausa entre bloques, no satura al equipo
+    }
+  }catch(err){ /* sin conexión: se reintenta la próxima vez que se abra la app */ }
+}
+descargarCatalogoEnSegundoPlano();
+
+const STORAGE_DESC_CACHE = "ubicaciones_descripciones_lru_v1";
+const LIMITE_CACHE_DESCRIPCIONES = 300; // ahora es solo un "acceso directo" a lo último tipeado; pesa muy poco
+
 let descCacheMem = null;
 function obtenerCacheDescMem(){
   if(descCacheMem === null){
@@ -721,24 +794,35 @@ document.getElementById("capCodigo").addEventListener("input", (e)=>{
     caja.textContent = "";
     return;
   }
-  // Si ya se consultó este código antes, sale al instante sin tocar la red
+  // Capa 1: lo último tipeado, en memoria -- instantáneo
   const cacheLocal = obtenerCacheDescMem();
   if(cacheLocal.datos[codigo] !== undefined){
     mostrarDescripcion(caja, cacheLocal.datos[codigo]);
     return;
   }
-  timerDescripcion = setTimeout(async ()=>{
-    if(SHEET_WEB_APP_URL.startsWith("PEGA_AQUI")) return;
-    try{
-      const resp = await fetch(SHEET_WEB_APP_URL + "?action=descripcion&codigo=" + encodeURIComponent(codigo));
-      const data = await resp.json();
-      // Si el usuario ya siguió escribiendo, esta respuesta quedó vieja: se ignora
-      if(document.getElementById("capCodigo").value.trim() !== codigo) return;
-      const descripcion = (data.ok && data.descripcion) ? data.descripcion : "No encontrado";
-      guardarEnCacheDescLocal(codigo, descripcion);
-      mostrarDescripcion(caja, descripcion);
-    }catch(err){ /* sin conexión: simplemente no se muestra la descripción */ }
-  }, 150);
+  // Capa 2: el catálogo completo en IndexedDB -- casi instantáneo (milisegundos, sin internet)
+  buscarEnIDB(codigo).then(descIDB=>{
+    if(document.getElementById("capCodigo").value.trim() !== codigo) return; // ya siguió escribiendo
+    if(descIDB !== undefined){
+      guardarEnCacheDescLocal(codigo, descIDB || "No encontrado");
+      mostrarDescripcion(caja, descIDB || "No encontrado");
+      return;
+    }
+    // Capa 3: todavía no está en el catálogo local (se está descargando, o el código es
+    // nuevo) -- se consulta a Sheets como respaldo, con un pequeño retraso.
+    clearTimeout(timerDescripcion);
+    timerDescripcion = setTimeout(async ()=>{
+      if(SHEET_WEB_APP_URL.startsWith("PEGA_AQUI")) return;
+      try{
+        const resp = await fetch(SHEET_WEB_APP_URL + "?action=descripcion&codigo=" + encodeURIComponent(codigo));
+        const data = await resp.json();
+        if(document.getElementById("capCodigo").value.trim() !== codigo) return;
+        const descripcion = (data.ok && data.descripcion) ? data.descripcion : "No encontrado";
+        guardarEnCacheDescLocal(codigo, descripcion);
+        mostrarDescripcion(caja, descripcion);
+      }catch(err){ /* sin conexión: simplemente no se muestra la descripción */ }
+    }, 150);
+  });
 });
 
 // Fecha de vencimiento: MM salta solo a AA, valida rangos
