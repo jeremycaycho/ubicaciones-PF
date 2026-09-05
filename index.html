@@ -98,9 +98,17 @@
   .table-scroll::-webkit-scrollbar{height:4px;}
   .table-scroll::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
 
-  .cell-input{background:transparent; border:1px solid transparent; color:var(--text); font-size:12px; padding:4px 5px; border-radius:6px; width:100%; min-width:64px; font-family:inherit;}
-  .cell-input:focus{outline:none; border-color:var(--accent); background:var(--card2);}
-  .cell-input.cell-sm{min-width:44px;}
+  .cell-editable{cursor:pointer; text-decoration:underline dotted var(--border); text-underline-offset:3px;}
+  .cell-editable:active{background:var(--card2);}
+
+  .modal-overlay{display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:60; align-items:center; justify-content:center;}
+  .modal-overlay.mostrar{display:flex;}
+  .modal-caja{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:20px; width:85%; max-width:320px;}
+  .modal-caja h3{margin:0 0 14px; font-size:16px; font-weight:600;}
+  .modal-caja input{width:100%; padding:12px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:15px; margin-bottom:16px;}
+  .modal-caja input:focus{outline:none; border-color:var(--accent);}
+  .modal-botones{display:flex; gap:10px;}
+  .modal-botones .btn{margin:0;}
 
   .hist-prov-block{margin-bottom:10px;}
   .hist-prov-header{width:100%; display:flex; justify-content:space-between; align-items:center; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:12px 14px; color:var(--text); font-size:13.5px; font-weight:600; cursor:pointer;}
@@ -350,6 +358,17 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modalEditarOverlay">
+  <div class="modal-caja">
+    <h3 id="modalEditarTitulo">Editar campo</h3>
+    <input type="text" id="modalEditarInput">
+    <div class="modal-botones">
+      <button class="btn btn-outline" id="modalEditarCancelar">Cancelar</button>
+      <button class="btn btn-accent" id="modalEditarConfirmar">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -435,17 +454,58 @@ function escAttr(v){
 function filaEditableTr(r, mostrarFecha){
   const est = estadoInfo(r.estado);
   const celdaFecha = mostrarFecha ? `<td>${r.fechaKey}</td>` : "";
+  const celda = (campo, valor) => `<td class="cell-editable" data-id="${r.id}" data-campo="${campo}">${escAttr(valor)}</td>`;
   return `<tr>
-    <td><input class="cell-input" data-id="${r.id}" data-campo="codigo" value="${escAttr(r.codigo)}" inputmode="text"></td>
-    <td><input class="cell-input" data-id="${r.id}" data-campo="lote" value="${escAttr(r.lote)}"></td>
-    <td><input class="cell-input cell-sm" data-id="${r.id}" data-campo="vcto" value="${escAttr(r.vcto)}"></td>
-    <td><input class="cell-input cell-sm" data-id="${r.id}" data-campo="cantidad" value="${escAttr(r.cantidad)}" inputmode="numeric"></td>
-    <td><input class="cell-input" data-id="${r.id}" data-campo="ubicacion" value="${escAttr(r.ubicacion)}"></td>
+    ${celda("codigo", r.codigo)}
+    ${celda("lote", r.lote)}
+    ${celda("vcto", r.vcto)}
+    ${celda("cantidad", r.cantidad)}
+    ${celda("ubicacion", r.ubicacion)}
     ${celdaFecha}
     <td>${r.usuario}</td>
     <td><span class="estado-pill ${est.clase}">${est.texto}</span></td>
   </tr>`;
 }
+const ETIQUETAS_CAMPO_EDITABLE = { codigo:"Código", lote:"Lote", vcto:"Vencimiento (MM-AA)", cantidad:"Cantidad", ubicacion:"Ubicación" };
+let edicionActual = null; // { id, campo }
+function abrirModalEdicion(id, campo, valorActual){
+  edicionActual = { id, campo };
+  document.getElementById("modalEditarTitulo").textContent = "Editar " + (ETIQUETAS_CAMPO_EDITABLE[campo] || campo);
+  const input = document.getElementById("modalEditarInput");
+  input.value = valorActual;
+  input.inputMode = (campo === "cantidad") ? "numeric" : "text";
+  document.getElementById("modalEditarOverlay").classList.add("mostrar");
+  setTimeout(()=> input.focus(), 50);
+}
+function cerrarModalEdicion(){
+  document.getElementById("modalEditarOverlay").classList.remove("mostrar");
+  edicionActual = null;
+}
+document.addEventListener("click", (e)=>{
+  const celda = e.target.closest(".cell-editable");
+  if(!celda) return;
+  abrirModalEdicion(celda.dataset.id, celda.dataset.campo, celda.textContent);
+});
+document.getElementById("modalEditarCancelar").addEventListener("click", cerrarModalEdicion);
+document.getElementById("modalEditarOverlay").addEventListener("click", (e)=>{
+  if(e.target.id === "modalEditarOverlay") cerrarModalEdicion();
+});
+document.getElementById("modalEditarConfirmar").addEventListener("click", ()=>{
+  if(!edicionActual) return;
+  const { id, campo } = edicionActual;
+  let valor = document.getElementById("modalEditarInput").value.trim();
+  if(campo === "lote" || campo === "ubicacion" || campo === "codigo") valor = valor.toUpperCase();
+  if(campo === "cantidad") valor = valor.replace(/[^0-9]/g,"");
+  cerrarModalEdicion();
+  editarCampoLocal(id, campo, valor);
+  // Refresca la pantalla visible para que el cambio se vea al instante
+  if(document.getElementById("screen-tabla").classList.contains("active")){
+    openTabla(document.getElementById("tablaTitle").textContent);
+  }
+  if(document.getElementById("screen-historial-tabla").classList.contains("active")){
+    renderHistorialTablaBody();
+  }
+});
 // Guarda un cambio hecho en un campo editable: lo actualiza localmente al instante
 // y lo manda a Google Sheets (si la fila ya estaba sincronizada, se marca para reenviar).
 function editarCampoLocal(id, campo, valor){
@@ -466,14 +526,6 @@ function editarCampoLocal(id, campo, valor){
     syncAll();
   }
 }
-document.addEventListener("change", (e)=>{
-  if(!e.target.classList || !e.target.classList.contains("cell-input")) return;
-  const campo = e.target.dataset.campo;
-  let valor = e.target.value.trim();
-  if(campo === "lote" || campo === "ubicacion" || campo === "codigo") valor = valor.toUpperCase();
-  if(campo === "cantidad") valor = valor.replace(/[^0-9]/g,"");
-  editarCampoLocal(e.target.dataset.id, campo, valor);
-});
 
 
 /* ---------- LOGIN (contraseña por usuario, verificada contra Google Sheets) ---------- */
