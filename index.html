@@ -221,7 +221,7 @@
     </div>
     <div class="field">
       <label>Código</label>
-      <input type="text" id="capCodigo" placeholder="Digitar código" inputmode="numeric">
+      <input type="text" id="capCodigo" placeholder="Digitar código" inputmode="text" autocapitalize="characters">
       <div class="descripcion-preview" id="capDescripcionPreview"></div>
     </div>
     <div class="field">
@@ -382,6 +382,13 @@ function showLoading(texto){
 function hideLoading(){
   document.getElementById("loadingOverlay").classList.add("hidden");
 }
+// Se usa para que la sincronización automática de fondo no compita con el usuario
+// mientras está escribiendo en el formulario de captura.
+let ultimaActividadEscritura = 0;
+function marcarActividadReciente(){ ultimaActividadEscritura = Date.now(); }
+function haActividadReciente(){ return (Date.now() - ultimaActividadEscritura) < 2500; }
+// Cualquier tecla presionada dentro de "Nueva ubicación" cuenta como actividad
+document.getElementById("screen-home").addEventListener("input", marcarActividadReciente);
 function loadRows(){ return JSON.parse(localStorage.getItem(STORAGE_ROWS) || "[]"); }
 function saveRows(rows){ localStorage.setItem(STORAGE_ROWS, JSON.stringify(rows)); }
 function loadProveedores(){ return JSON.parse(localStorage.getItem(STORAGE_PROV) || "[]"); }
@@ -429,7 +436,7 @@ function filaEditableTr(r, mostrarFecha){
   const est = estadoInfo(r.estado);
   const celdaFecha = mostrarFecha ? `<td>${r.fechaKey}</td>` : "";
   return `<tr>
-    <td><input class="cell-input" data-id="${r.id}" data-campo="codigo" value="${escAttr(r.codigo)}" inputmode="numeric"></td>
+    <td><input class="cell-input" data-id="${r.id}" data-campo="codigo" value="${escAttr(r.codigo)}" inputmode="text"></td>
     <td><input class="cell-input" data-id="${r.id}" data-campo="lote" value="${escAttr(r.lote)}"></td>
     <td><input class="cell-input cell-sm" data-id="${r.id}" data-campo="vcto" value="${escAttr(r.vcto)}"></td>
     <td><input class="cell-input cell-sm" data-id="${r.id}" data-campo="cantidad" value="${escAttr(r.cantidad)}" inputmode="numeric"></td>
@@ -463,7 +470,7 @@ document.addEventListener("change", (e)=>{
   if(!e.target.classList || !e.target.classList.contains("cell-input")) return;
   const campo = e.target.dataset.campo;
   let valor = e.target.value.trim();
-  if(campo === "lote" || campo === "ubicacion") valor = valor.toUpperCase();
+  if(campo === "lote" || campo === "ubicacion" || campo === "codigo") valor = valor.toUpperCase();
   if(campo === "cantidad") valor = valor.replace(/[^0-9]/g,"");
   editarCampoLocal(e.target.dataset.id, campo, valor);
 });
@@ -662,10 +669,50 @@ document.getElementById("capProveedorManual").addEventListener("input", (e)=>{
 document.getElementById("capLote").addEventListener("input", (e)=>{
   e.target.value = e.target.value.toUpperCase();
 });
-// Código: solo dígitos
+/* ---------- DESCRIPCIONES DE PRODUCTO: cachecita CHICA (no toda la lista, para no ocupar
+   memoria en equipos con poco espacio como el Honeywell). Solo recuerda los códigos que ya
+   se consultaron antes -- esos salen instantáneos; lo demás sigue consultando a Sheets
+   (que ya busca directo la celda, sin leer las 30 mil filas). ---------- */
+const STORAGE_DESC_CACHE = "ubicaciones_descripciones_lru_v1";
+const LIMITE_CACHE_DESCRIPCIONES = 150; // cuántos códigos distintos recuerda como máximo (pesa muy poco)
+
+// La cachecita se guarda en una variable de JS (no se vuelve a leer/parsear el
+// localStorage en cada tecla, eso era lo que iba lenteando la escritura en equipos
+// con poco procesador como el Honeywell). Solo se lee UNA vez al cargar la app.
+let descCacheMem = null;
+function obtenerCacheDescMem(){
+  if(descCacheMem === null){
+    try{ descCacheMem = JSON.parse(localStorage.getItem(STORAGE_DESC_CACHE) || '{"orden":[],"datos":{}}'); }
+    catch(e){ descCacheMem = {orden:[], datos:{}}; }
+  }
+  return descCacheMem;
+}
+function guardarEnCacheDescLocal(codigo, descripcion){
+  const cache = obtenerCacheDescMem();
+  if(!(codigo in cache.datos)) cache.orden.push(codigo);
+  cache.datos[codigo] = descripcion;
+  while(cache.orden.length > LIMITE_CACHE_DESCRIPCIONES){
+    const viejo = cache.orden.shift();
+    delete cache.datos[viejo];
+  }
+  localStorage.setItem(STORAGE_DESC_CACHE, JSON.stringify(cache));
+}
+function mostrarDescripcion(caja, descripcion){
+  if(descripcion && descripcion !== "No encontrado"){
+    caja.textContent = descripcion;
+    caja.classList.remove("no-encontrado");
+    caja.classList.add("mostrar");
+  } else {
+    caja.textContent = "Producto no encontrado en la lista";
+    caja.classList.add("mostrar","no-encontrado");
+  }
+}
+
 let timerDescripcion = null;
 document.getElementById("capCodigo").addEventListener("input", (e)=>{
-  e.target.value = e.target.value.replace(/[^0-9]/g,"");
+  // Ahora se permiten letras además de números (hay códigos tipo "OB1625")
+  e.target.value = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g,"");
+  marcarActividadReciente();
   const codigo = e.target.value.trim();
   const caja = document.getElementById("capDescripcionPreview");
   clearTimeout(timerDescripcion);
@@ -674,7 +721,12 @@ document.getElementById("capCodigo").addEventListener("input", (e)=>{
     caja.textContent = "";
     return;
   }
-  // Espera un poco a que termine de digitar antes de consultar, para no saturar de pedidos
+  // Si ya se consultó este código antes, sale al instante sin tocar la red
+  const cacheLocal = obtenerCacheDescMem();
+  if(cacheLocal.datos[codigo] !== undefined){
+    mostrarDescripcion(caja, cacheLocal.datos[codigo]);
+    return;
+  }
   timerDescripcion = setTimeout(async ()=>{
     if(SHEET_WEB_APP_URL.startsWith("PEGA_AQUI")) return;
     try{
@@ -682,14 +734,9 @@ document.getElementById("capCodigo").addEventListener("input", (e)=>{
       const data = await resp.json();
       // Si el usuario ya siguió escribiendo, esta respuesta quedó vieja: se ignora
       if(document.getElementById("capCodigo").value.trim() !== codigo) return;
-      if(data.ok && data.descripcion && data.descripcion !== "No encontrado"){
-        caja.textContent = data.descripcion;
-        caja.classList.remove("no-encontrado");
-        caja.classList.add("mostrar");
-      } else {
-        caja.textContent = "Producto no encontrado en la lista";
-        caja.classList.add("mostrar","no-encontrado");
-      }
+      const descripcion = (data.ok && data.descripcion) ? data.descripcion : "No encontrado";
+      guardarEnCacheDescLocal(codigo, descripcion);
+      mostrarDescripcion(caja, descripcion);
     }catch(err){ /* sin conexión: simplemente no se muestra la descripción */ }
   }, 150);
 });
@@ -1044,7 +1091,11 @@ async function syncAll(){
 showLoading("Cargando...");
 const topeCargaInicial = setTimeout(hideLoading, 4000);
 syncAll().finally(()=>{ clearTimeout(topeCargaInicial); hideLoading(); });
-setInterval(()=>{ if(navigator.onLine) syncAll(); }, 15000);
+// Si el usuario está escribiendo justo en este momento, el ciclo de sincronización
+// automática se salta esta vuelta -- así no compite por el procesador del equipo
+// mientras se tipea (en equipos con poco procesador, como el Honeywell, eso se
+// sentía como que la app "se lenteaba" al escribir).
+setInterval(()=>{ if(navigator.onLine && !haActividadReciente()) syncAll(); }, 15000);
 window.addEventListener("online", syncAll);
 
 // Registro del service worker: permite instalar la app (ícono propio, pantalla completa)
