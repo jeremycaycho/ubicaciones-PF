@@ -100,6 +100,8 @@
 
   .cell-editable{cursor:pointer; text-decoration:underline dotted var(--border); text-underline-offset:3px;}
   .cell-editable:active{background:var(--card2);}
+  .btn-borrar-fila{background:transparent; border:none; font-size:15px; padding:2px 4px; cursor:pointer; line-height:1;}
+  .btn-borrar-fila:active{opacity:0.6;}
 
   .modal-overlay{display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:60; align-items:center; justify-content:center;}
   .modal-overlay.mostrar{display:flex;}
@@ -256,9 +258,9 @@
         <label class="radio-opt"><input type="radio" name="modoUbic" value="mod"> MOD</label>
       </div>
       <div class="split-row" id="ubicacionCampos">
-        <input type="text" id="capUbic1" class="w-lg" placeholder="0000" maxlength="4">
+        <input type="text" id="capUbic1" class="w-lg" placeholder="-" maxlength="4">
         <span>-</span>
-        <input type="text" id="capUbic2" class="w-sm" placeholder="XX" maxlength="2">
+        <input type="text" id="capUbic2" class="w-sm" placeholder="-" maxlength="2">
       </div>
     </div>
     <button class="btn btn-accent" id="btnSaveRow">Guardar fila</button>
@@ -283,7 +285,7 @@
     </div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Código</th><th>Lote</th><th>Vcto</th><th>Cant.</th><th>Ubicación</th><th>Fecha</th><th>Usuario</th><th>Estado</th></tr></thead>
+        <thead><tr><th></th><th>Código</th><th>Lote</th><th>Vcto</th><th>Cant.</th><th>Ubicación</th><th>Fecha</th><th>Usuario</th><th>Estado</th></tr></thead>
         <tbody id="tablaBody"></tbody>
       </table>
     </div>
@@ -319,7 +321,7 @@
     </div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Código</th><th>Lote</th><th>Vcto</th><th>Cant.</th><th>Ubicación</th><th>Usuario</th><th>Estado</th></tr></thead>
+        <thead><tr><th></th><th>Código</th><th>Lote</th><th>Vcto</th><th>Cant.</th><th>Ubicación</th><th>Usuario</th><th>Estado</th></tr></thead>
         <tbody id="histTablaBody"></tbody>
       </table>
     </div>
@@ -365,6 +367,17 @@
     <div class="modal-botones">
       <button class="btn btn-outline" id="modalEditarCancelar">Cancelar</button>
       <button class="btn btn-accent" id="modalEditarConfirmar">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalBorrarOverlay">
+  <div class="modal-caja">
+    <h3>Borrar registro</h3>
+    <p id="modalBorrarDetalle" style="color:var(--muted); font-size:13.5px; margin:0 0 16px;"></p>
+    <div class="modal-botones">
+      <button class="btn btn-outline" id="modalBorrarCancelar">Cancelar</button>
+      <button class="btn" id="modalBorrarConfirmar" style="background:var(--rojo); border-color:var(--rojo); color:#fff;">Borrar</button>
     </div>
   </div>
 </div>
@@ -455,7 +468,9 @@ function filaEditableTr(r, mostrarFecha){
   const est = estadoInfo(r.estado);
   const celdaFecha = mostrarFecha ? `<td>${r.fechaKey}</td>` : "";
   const celda = (campo, valor) => `<td class="cell-editable" data-id="${r.id}" data-campo="${campo}">${escAttr(valor)}</td>`;
+  const resumen = escAttr((r.codigo||"") + " (Lote " + (r.lote||"") + ")");
   return `<tr>
+    <td><button class="btn-borrar-fila cell-borrar" data-id="${r.id}" data-resumen="${resumen}" aria-label="Borrar fila">🗑️</button></td>
     ${celda("codigo", r.codigo)}
     ${celda("lote", r.lote)}
     ${celda("vcto", r.vcto)}
@@ -527,6 +542,63 @@ function editarCampoLocal(id, campo, valor){
   }
 }
 
+/* ---------- BORRAR FILA (con ventanita de confirmación) ---------- */
+const STORAGE_ELIMINACIONES = "ubicaciones_eliminaciones_pendientes_v1";
+function cargarEliminacionesPendientes(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_ELIMINACIONES) || "[]"); }
+  catch(e){ return []; }
+}
+function guardarEliminacionesPendientes(lista){
+  localStorage.setItem(STORAGE_ELIMINACIONES, JSON.stringify(lista));
+}
+// Borra la fila del celular al instante; si ya estaba sincronizada con Sheets, la deja
+// anotada para avisarle al servidor en el próximo ciclo de sincronización que también
+// la borre allá.
+function borrarFilaLocal(id){
+  const rows = loadRows();
+  const fila = rows.find(r=> String(r.id) === String(id));
+  saveRows(rows.filter(r=> String(r.id) !== String(id)));
+  if(fila && fila.sincronizado){
+    const pendientes = cargarEliminacionesPendientes();
+    if(!pendientes.includes(String(id))) pendientes.push(String(id));
+    guardarEliminacionesPendientes(pendientes);
+  }
+  showToast("Registro borrado");
+  syncAll();
+}
+
+let borrarIdActual = null;
+function abrirModalBorrar(id, resumen){
+  borrarIdActual = id;
+  document.getElementById("modalBorrarDetalle").textContent =
+    "¿Seguro que quieres borrar " + resumen + "? Esta acción no se puede deshacer.";
+  document.getElementById("modalBorrarOverlay").classList.add("mostrar");
+}
+function cerrarModalBorrar(){
+  document.getElementById("modalBorrarOverlay").classList.remove("mostrar");
+  borrarIdActual = null;
+}
+document.addEventListener("click", (e)=>{
+  const boton = e.target.closest(".cell-borrar");
+  if(!boton) return;
+  abrirModalBorrar(boton.dataset.id, boton.dataset.resumen || "este registro");
+});
+document.getElementById("modalBorrarCancelar").addEventListener("click", cerrarModalBorrar);
+document.getElementById("modalBorrarOverlay").addEventListener("click", (e)=>{
+  if(e.target.id === "modalBorrarOverlay") cerrarModalBorrar();
+});
+document.getElementById("modalBorrarConfirmar").addEventListener("click", ()=>{
+  if(!borrarIdActual) return;
+  const id = borrarIdActual;
+  cerrarModalBorrar();
+  borrarFilaLocal(id);
+  if(document.getElementById("screen-tabla").classList.contains("active")){
+    openTabla(document.getElementById("tablaTitle").textContent);
+  }
+  if(document.getElementById("screen-historial-tabla").classList.contains("active")){
+    renderHistorialTablaBody();
+  }
+});
 
 /* ---------- LOGIN (contraseña por usuario, verificada contra Google Sheets) ---------- */
 const STORAGE_LOGIN_CACHE = "ubicaciones_login_cache_v1";
@@ -1157,6 +1229,24 @@ async function pushEdiciones(){
   try{ await resp.json(); }catch(_e){ /* respuesta no legible: la edición ya se guardó igual */ }
 }
 
+// Avisa a Google Sheets que borre las filas marcadas para eliminar (las que ya estaban
+// sincronizadas cuando se borraron desde la app).
+async function pushEliminaciones(){
+  const pendientes = cargarEliminacionesPendientes();
+  if(pendientes.length === 0) return;
+  try{
+    const resp = await fetch(SHEET_WEB_APP_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify({ eliminaciones: pendientes })
+    });
+    // Igual que con inserciones/ediciones: en cuanto se entrega la petición se da por
+    // aplicada (Apps Script a veces no deja leer la respuesta aunque sí se ejecutó).
+    guardarEliminacionesPendientes([]);
+    try{ await resp.json(); }catch(_e){}
+  }catch(err){ /* fallo real de red: se reintenta en el próximo ciclo */ }
+}
+
 // Trae TODO lo que hay guardado en Google Sheets (sin importar desde qué dispositivo se
 // haya ingresado) y lo combina con lo que este dispositivo todavía no alcanzó a enviar.
 // Así cualquier celular o laptop que abra la app ve lo mismo, siempre.
@@ -1202,6 +1292,7 @@ async function syncAll(){
   try{
     await pushPendientes();
     await pushEdiciones();
+    await pushEliminaciones();
     await pullTodos();
     await pullProveedores();
     lastSyncAt = todayKey() + " " + nowTimeStr();
