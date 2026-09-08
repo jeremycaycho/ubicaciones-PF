@@ -241,11 +241,12 @@
     <div class="field">
       <label>Fecha de vencimiento</label>
       <div class="split-row">
+        <input type="text" id="capDD" class="w-sm" placeholder="DD" inputmode="numeric" maxlength="2">
+        <span>-</span>
         <input type="text" id="capMM" class="w-sm" placeholder="MM" inputmode="numeric" maxlength="2">
         <span>-</span>
         <input type="text" id="capAA" class="w-sm" placeholder="AA" inputmode="numeric" maxlength="2">
       </div>
-      <div class="hint">Mes 01-12, año no puede ser menor al actual</div>
     </div>
     <div class="field">
       <label>Cantidad</label>
@@ -258,9 +259,9 @@
         <label class="radio-opt"><input type="radio" name="modoUbic" value="mod"> MOD</label>
       </div>
       <div class="split-row" id="ubicacionCampos">
-        <input type="text" id="capUbic1" class="w-lg" placeholder="-" maxlength="4">
+        <input type="text" id="capUbic1" class="w-lg" placeholder="0000" maxlength="4">
         <span>-</span>
-        <input type="text" id="capUbic2" class="w-sm" placeholder="-" maxlength="2">
+        <input type="text" id="capUbic2" class="w-sm" placeholder="XX" maxlength="2">
       </div>
     </div>
     <button class="btn btn-accent" id="btnSaveRow">Guardar fila</button>
@@ -448,7 +449,7 @@ function textoSeguro(valor, tipo){
     const mm = String(d.getUTCMonth()+1).padStart(2,"0");
     const yyyy = d.getUTCFullYear();
     if(tipo === "hora") return String(d.getUTCHours()).padStart(2,"0")+":"+String(d.getUTCMinutes()).padStart(2,"0");
-    if(tipo === "vcto") return mm+"-"+String(yyyy).slice(-2);
+    if(tipo === "vcto") return dd+"-"+mm+"-"+String(yyyy).slice(-2);
     return dd+"-"+mm+"-"+yyyy;
   }
   return valor;
@@ -481,7 +482,7 @@ function filaEditableTr(r, mostrarFecha){
     <td><span class="estado-pill ${est.clase}">${est.texto}</span></td>
   </tr>`;
 }
-const ETIQUETAS_CAMPO_EDITABLE = { codigo:"Código", lote:"Lote", vcto:"Vencimiento (MM-AA)", cantidad:"Cantidad", ubicacion:"Ubicación" };
+const ETIQUETAS_CAMPO_EDITABLE = { codigo:"Código", lote:"Lote", vcto:"Vencimiento (DD-MM-AA)", cantidad:"Cantidad", ubicacion:"Ubicación" };
 let edicionActual = null; // { id, campo }
 function abrirModalEdicion(id, campo, valorActual){
   edicionActual = { id, campo };
@@ -949,12 +950,29 @@ document.getElementById("capCodigo").addEventListener("input", (e)=>{
   });
 });
 
-// Fecha de vencimiento: MM salta solo a AA, valida rangos
+// Fecha de vencimiento: DD salta a MM, MM salta a AA. Si no se especifica el día,
+// se asume "01" (primer día del mes) al salir del campo.
+const capDD = document.getElementById("capDD");
 const capMM = document.getElementById("capMM");
 const capAA = document.getElementById("capAA");
+capDD.addEventListener("input", ()=>{
+  capDD.value = capDD.value.replace(/[^0-9]/g,"").slice(0,2);
+  if(capDD.value.length === 2) setTimeout(()=> capMM.focus(), 0);
+});
+capDD.addEventListener("blur", ()=>{
+  if(capDD.value.length === 1) capDD.value = "0"+capDD.value;
+  if(capDD.value){
+    const dia = Number(capDD.value);
+    if(dia < 1 || dia > 31){
+      showToast("El día debe estar entre 01 y 31");
+      capDD.value = "";
+    }
+  }
+  if(!capDD.value) capDD.value = "01"; // no se especificó: se asume el primer día del mes
+});
 capMM.addEventListener("input", ()=>{
   capMM.value = capMM.value.replace(/[^0-9]/g,"").slice(0,2);
-  if(capMM.value.length === 2) capAA.focus();
+  if(capMM.value.length === 2) setTimeout(()=> capAA.focus(), 0);
 });
 capMM.addEventListener("blur", ()=>{
   if(capMM.value.length === 1) capMM.value = "0"+capMM.value;
@@ -985,7 +1003,10 @@ const capUbic1 = document.getElementById("capUbic1");
 const capUbic2 = document.getElementById("capUbic2");
 capUbic1.addEventListener("input", ()=>{
   capUbic1.value = capUbic1.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,4);
-  if(capUbic1.value.length === 4) capUbic2.focus();
+  // El cambio de foco se retrasa un instante (en vez de ser inmediato) porque en teclados
+  // físicos como el del Honeywell, cambiar de campo en el mismo instante de la tecla podía
+  // hacer que ese último carácter se registrara dos veces (una en cada campo).
+  if(capUbic1.value.length === 4) setTimeout(()=> capUbic2.focus(), 0);
 });
 capUbic2.addEventListener("input", ()=>{
   capUbic2.value = capUbic2.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,2);
@@ -1012,6 +1033,7 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
     : selProveedor;
   const codigo = document.getElementById("capCodigo").value.trim();
   const lote = document.getElementById("capLote").value.trim();
+  const dd = (capDD.value || "01").padStart(2,"0"); // si no se especificó el día, se asume el primer día del mes
   const mm = capMM.value;
   const aa = capAA.value;
   const cantidad = document.getElementById("capCantidad").value;
@@ -1042,7 +1064,7 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
     showToast("Completa mes y año de vencimiento (valores válidos)");
     return;
   }
-  const vcto = mm + "-" + aa;
+  const vcto = dd + "-" + mm + "-" + aa;
 
   const rows = loadRows();
   rows.push({
@@ -1053,7 +1075,7 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   });
   saveRows(rows);
 
-  ["capCodigo","capLote","capMM","capAA","capCantidad","capUbic1","capUbic2","capProveedorManual"].forEach(id=>document.getElementById(id).value="");
+  ["capCodigo","capLote","capDD","capMM","capAA","capCantidad","capUbic1","capUbic2","capProveedorManual"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("capDescripcionPreview").classList.remove("mostrar","no-encontrado");
   document.getElementById("capDescripcionPreview").textContent = "";
   if(selProveedor === "__manual__"){
