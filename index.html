@@ -53,17 +53,17 @@
   .input-con-repetir{position:relative;}
   .input-con-repetir input[type="text"], .input-con-repetir input[type="number"]{padding-right:42px;}
   .repetir-radio{position:absolute; top:50%; right:12px; transform:translateY(-50%); display:flex; align-items:center; z-index:2;}
-  .repetir-radio input, .repetir-radio-arriba input{
+  .repetir-radio input, .repetir-radio-vcto input{
     -webkit-appearance:none; appearance:none;
     width:16px; height:16px; margin:0; border-radius:50%;
     border:2px solid var(--border); background:var(--card2); cursor:pointer;
   }
-  .repetir-radio input:checked, .repetir-radio-arriba input:checked{
+  .repetir-radio input:checked, .repetir-radio-vcto input:checked{
     border-color:var(--accent); background:var(--accent);
     box-shadow: inset 0 0 0 2.5px var(--card2);
   }
-  .label-con-repetir{display:flex; align-items:center; justify-content:space-between;}
-  .repetir-radio-arriba{display:flex; align-items:center;}
+  .vcto-row{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .repetir-radio-vcto{display:flex; align-items:center; flex:none;}
   #tablaBuscarCodigo, #histTablaBuscarCodigo{width:100%; padding:11px 12px 11px 36px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:14px; box-sizing:border-box;}
   #tablaBuscarCodigo:focus, #histTablaBuscarCodigo:focus{outline:none; border-color:var(--accent);}
   .buscar-wrap{position:relative;}
@@ -264,13 +264,16 @@
       </div>
     </div>
     <div class="field">
-      <label class="label-con-repetir">Fecha de vencimiento <span class="repetir-radio-arriba" title="Repetir el último valor de hoy"><input type="checkbox" id="chkRepetirVcto"></span></label>
-      <div class="split-row">
-        <input type="text" id="capDD" class="w-sm" placeholder="DD" inputmode="numeric" maxlength="2">
-        <span>-</span>
-        <input type="text" id="capMM" class="w-sm" placeholder="MM" inputmode="numeric" maxlength="2">
-        <span>-</span>
-        <input type="text" id="capAA" class="w-sm" placeholder="AA" inputmode="numeric" maxlength="2">
+      <label>Fecha de vencimiento</label>
+      <div class="vcto-row">
+        <div class="split-row">
+          <input type="text" id="capDD" class="w-sm" placeholder="DD" inputmode="numeric" maxlength="2">
+          <span>-</span>
+          <input type="text" id="capMM" class="w-sm" placeholder="MM" inputmode="numeric" maxlength="2">
+          <span>-</span>
+          <input type="text" id="capAA" class="w-sm" placeholder="AA" inputmode="numeric" maxlength="2">
+        </div>
+        <span class="repetir-radio-vcto" title="Repetir el último valor de hoy"><input type="checkbox" id="chkRepetirVcto"></span>
       </div>
     </div>
     <div class="field">
@@ -575,7 +578,7 @@ function editarCampoLocal(id, campo, valor){
   if(cambio){
     saveRows(actualizado);
     showToast("Cambio guardado");
-    syncAll();
+    setTimeout(syncAll, 0);
   }
 }
 
@@ -601,7 +604,10 @@ function borrarFilaLocal(id){
     guardarEliminacionesPendientes(pendientes);
   }
   showToast("Registro borrado");
-  syncAll();
+  // La sincronización (avisarle a Google Sheets) se dispara con un pequeño retraso, para
+  // que el borrado se vea al instante en el celular -- sin esperar por la red antes de
+  // volver a dibujar la tabla sin esa fila.
+  setTimeout(syncAll, 0);
 }
 
 let borrarIdActual = null;
@@ -1129,10 +1135,29 @@ function aplicarRepetirCantidad(){
   if(!u){ showToast("Aún no hay ningún registro de hoy para repetir"); document.getElementById("chkRepetirCantidad").checked=false; return; }
   document.getElementById("capCantidad").value = u.cantidad || "";
 }
-document.getElementById("chkRepetirCodigo").addEventListener("change", (e)=>{ if(e.target.checked) aplicarRepetirCodigo(); });
-document.getElementById("chkRepetirLote").addEventListener("change", (e)=>{ if(e.target.checked) aplicarRepetirLote(); });
-document.getElementById("chkRepetirVcto").addEventListener("change", (e)=>{ if(e.target.checked) aplicarRepetirVcto(); });
-document.getElementById("chkRepetirCantidad").addEventListener("change", (e)=>{ if(e.target.checked) aplicarRepetirCantidad(); });
+document.getElementById("chkRepetirCodigo").addEventListener("change", (e)=>{
+  if(e.target.checked) aplicarRepetirCodigo();
+  else{
+    document.getElementById("capCodigo").value = "";
+    document.getElementById("capDescripcionPreview").classList.remove("mostrar","no-encontrado");
+    document.getElementById("capDescripcionPreview").textContent = "";
+  }
+});
+document.getElementById("chkRepetirLote").addEventListener("change", (e)=>{
+  if(e.target.checked) aplicarRepetirLote();
+  else document.getElementById("capLote").value = "";
+});
+document.getElementById("chkRepetirVcto").addEventListener("change", (e)=>{
+  if(e.target.checked) aplicarRepetirVcto();
+  else{
+    capDD.value = ""; capMM.value = ""; capAA.value = "";
+    capDD.classList.remove("campo-invalido"); capMM.classList.remove("campo-invalido"); capAA.classList.remove("campo-invalido");
+  }
+});
+document.getElementById("chkRepetirCantidad").addEventListener("change", (e)=>{
+  if(e.target.checked) aplicarRepetirCantidad();
+  else document.getElementById("capCantidad").value = "";
+});
 // Si el check se queda marcado, se vuelve a aplicar solo después de guardar una fila
 // (así se puede repetir el mismo código/lote/vencimiento/cantidad varias veces seguidas,
 // cambiando solo la ubicación cada vez).
@@ -1211,7 +1236,7 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   document.getElementById("ubicacionCampos").style.display = "flex";
   showToast("Fila guardada");
   reaplicarChecksRepetir();
-  syncAll(); // se envía sola a Google Sheets al instante, sin botones
+  setTimeout(syncAll, 0); // se envía sola a Google Sheets un instante después, para que el formulario se limpie al instante sin esperar
 });
 
 /* ---------- PANTALLA PROVEEDORES (tarjetas) ---------- */
