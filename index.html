@@ -52,17 +52,18 @@
   .field .hint{font-size:11px; color:var(--muted); margin-top:4px;}
   .input-con-repetir{position:relative;}
   .input-con-repetir input[type="text"], .input-con-repetir input[type="number"]{padding-right:42px;}
-  .input-con-repetir .split-row{padding-right:34px;}
   .repetir-radio{position:absolute; top:50%; right:12px; transform:translateY(-50%); display:flex; align-items:center; z-index:2;}
-  .repetir-radio input{
+  .repetir-radio input, .repetir-radio-arriba input{
     -webkit-appearance:none; appearance:none;
     width:16px; height:16px; margin:0; border-radius:50%;
     border:2px solid var(--border); background:var(--card2); cursor:pointer;
   }
-  .repetir-radio input:checked{
+  .repetir-radio input:checked, .repetir-radio-arriba input:checked{
     border-color:var(--accent); background:var(--accent);
     box-shadow: inset 0 0 0 2.5px var(--card2);
   }
+  .label-con-repetir{display:flex; align-items:center; justify-content:space-between;}
+  .repetir-radio-arriba{display:flex; align-items:center;}
   #tablaBuscarCodigo, #histTablaBuscarCodigo{width:100%; padding:11px 12px 11px 36px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:14px; box-sizing:border-box;}
   #tablaBuscarCodigo:focus, #histTablaBuscarCodigo:focus{outline:none; border-color:var(--accent);}
   .buscar-wrap{position:relative;}
@@ -83,6 +84,7 @@
   .split-row input{text-align:center;}
   .split-row span{color:var(--muted); font-weight:600;}
   .split-row .w-sm{width:64px; flex:none;}
+  .campo-invalido{border-color:var(--rojo) !important; background:rgba(220,38,38,0.12) !important;}
   .split-row .w-lg{width:84px; flex:none;}
   .radio-row{display:flex; gap:18px; margin-bottom:10px;}
   .radio-opt{display:flex; align-items:center; gap:6px; font-size:13.5px; color:var(--text); cursor:pointer;}
@@ -262,16 +264,13 @@
       </div>
     </div>
     <div class="field">
-      <label>Fecha de vencimiento</label>
-      <div class="input-con-repetir">
-        <div class="split-row">
-          <input type="text" id="capDD" class="w-sm" placeholder="DD" inputmode="numeric" maxlength="2">
-          <span>-</span>
-          <input type="text" id="capMM" class="w-sm" placeholder="MM" inputmode="numeric" maxlength="2">
-          <span>-</span>
-          <input type="text" id="capAA" class="w-sm" placeholder="AA" inputmode="numeric" maxlength="2">
-        </div>
-        <span class="repetir-radio" title="Repetir el último valor de hoy"><input type="checkbox" id="chkRepetirVcto"></span>
+      <label class="label-con-repetir">Fecha de vencimiento <span class="repetir-radio-arriba" title="Repetir el último valor de hoy"><input type="checkbox" id="chkRepetirVcto"></span></label>
+      <div class="split-row">
+        <input type="text" id="capDD" class="w-sm" placeholder="DD" inputmode="numeric" maxlength="2">
+        <span>-</span>
+        <input type="text" id="capMM" class="w-sm" placeholder="MM" inputmode="numeric" maxlength="2">
+        <span>-</span>
+        <input type="text" id="capAA" class="w-sm" placeholder="AA" inputmode="numeric" maxlength="2">
       </div>
     </div>
     <div class="field">
@@ -1001,51 +1000,71 @@ document.getElementById("capCodigo").addEventListener("input", (e)=>{
 });
 
 // Fecha de vencimiento: DD salta a MM, MM salta a AA. Si no se especifica el día,
-// se asume "01" (primer día del mes) al salir del campo.
+// se asume "01" (primer día del mes) al salir del campo. Cada casillero se pinta de
+// rojo cuando su valor no es válido (y se deja el valor a la vista, para corregirlo,
+// en vez de borrarlo solo) -- el día se valida contra los días reales del mes/año
+// (28, 29, 30 o 31 según corresponda, con años bisiestos incluidos).
 const capDD = document.getElementById("capDD");
 const capMM = document.getElementById("capMM");
 const capAA = document.getElementById("capAA");
+
+function diasEnMes(mes, anioCorto){
+  // Si todavía no se conoce el año, se asume uno bisiesto (para no rechazar un 29 de
+  // febrero antes de tiempo) -- en cuanto se conozca el año real, se vuelve a validar.
+  const anioCompleto = (anioCorto === null) ? 2024 : 2000 + anioCorto;
+  return new Date(anioCompleto, mes, 0).getDate();
+}
+function validarFechaVcto(){
+  const dd = capDD.value ? Number(capDD.value) : null;
+  const mm = capMM.value ? Number(capMM.value) : null;
+  const aa = capAA.value ? Number(capAA.value) : null;
+
+  const mesValido = (mm === null) || (mm >= 1 && mm <= 12);
+  capMM.classList.toggle("campo-invalido", mm !== null && !mesValido);
+
+  let diaValido = (dd === null) || (dd >= 1 && dd <= 31);
+  if(dd !== null && mm !== null && mesValido){
+    diaValido = dd >= 1 && dd <= diasEnMes(mm, aa);
+  }
+  capDD.classList.toggle("campo-invalido", dd !== null && !diaValido);
+
+  const anioValido = (aa === null) || aa >= anioActualCorto();
+  capAA.classList.toggle("campo-invalido", aa !== null && !anioValido);
+
+  return { diaValido, mesValido, anioValido };
+}
+
 capDD.addEventListener("input", ()=>{
   capDD.value = capDD.value.replace(/[^0-9]/g,"").slice(0,2);
+  validarFechaVcto();
   if(capDD.value.length === 2) setTimeout(()=> capMM.focus(), 0);
 });
 capDD.addEventListener("blur", ()=>{
   if(capDD.value.length === 1) capDD.value = "0"+capDD.value;
-  if(capDD.value){
-    const dia = Number(capDD.value);
-    if(dia < 1 || dia > 31){
-      showToast("El día debe estar entre 01 y 31");
-      capDD.value = "";
-    }
-  }
   if(!capDD.value) capDD.value = "01"; // no se especificó: se asume el primer día del mes
+  const r = validarFechaVcto();
+  if(!r.diaValido) showToast("El día " + capDD.value + " no es válido" + (capMM.value ? " para ese mes" : ""));
 });
 capMM.addEventListener("input", ()=>{
   capMM.value = capMM.value.replace(/[^0-9]/g,"").slice(0,2);
+  validarFechaVcto();
   if(capMM.value.length === 2) setTimeout(()=> capAA.focus(), 0);
 });
 capMM.addEventListener("blur", ()=>{
   if(capMM.value.length === 1) capMM.value = "0"+capMM.value;
-  if(capMM.value){
-    const mes = Number(capMM.value);
-    if(mes < 1 || mes > 12){
-      showToast("El mes debe estar entre 01 y 12");
-      capMM.value = "";
-    }
-  }
+  const r = validarFechaVcto();
+  if(capMM.value && !r.mesValido) showToast("El mes debe estar entre 01 y 12");
+  else if(capDD.value && !r.diaValido) showToast("El día " + capDD.value + " no es válido para ese mes");
 });
 capAA.addEventListener("input", ()=>{
   capAA.value = capAA.value.replace(/[^0-9]/g,"").slice(0,2);
+  validarFechaVcto();
 });
 capAA.addEventListener("blur", ()=>{
   if(capAA.value.length === 1) capAA.value = "0"+capAA.value;
-  if(capAA.value){
-    const anio = Number(capAA.value);
-    if(anio < anioActualCorto()){
-      showToast("El año no puede ser menor al actual (" + String(anioActualCorto()).padStart(2,"0") + ")");
-      capAA.value = "";
-    }
-  }
+  const r = validarFechaVcto();
+  if(capAA.value && !r.anioValido) showToast("El año no puede ser menor al actual (" + String(anioActualCorto()).padStart(2,"0") + ")");
+  else if(capDD.value && !r.diaValido) showToast("El día " + capDD.value + " no es válido para ese mes/año");
 });
 
 // Ubicación: primer bloque de 4 salta solo al segundo de 2
@@ -1102,6 +1121,7 @@ function aplicarRepetirVcto(){
   const partes = String(u.vcto).split("-");
   if(partes.length===3){
     capDD.value = partes[0]; capMM.value = partes[1]; capAA.value = partes[2];
+    validarFechaVcto();
   }
 }
 function aplicarRepetirCantidad(){
@@ -1161,6 +1181,10 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
     showToast("Completa mes y año de vencimiento (valores válidos)");
     return;
   }
+  if(!validarFechaVcto().diaValido || capMM.classList.contains("campo-invalido") || capAA.classList.contains("campo-invalido")){
+    showToast("Corrige la fecha de vencimiento antes de guardar (está en rojo)");
+    return;
+  }
   const vcto = dd + "-" + mm + "-" + aa;
 
   const rows = loadRows();
@@ -1172,7 +1196,11 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   });
   saveRows(rows);
 
-  ["capCodigo","capLote","capDD","capMM","capAA","capCantidad","capUbic1","capUbic2","capProveedorManual"].forEach(id=>document.getElementById(id).value="");
+  ["capCodigo","capLote","capDD","capMM","capAA","capCantidad","capUbic1","capUbic2","capProveedorManual"].forEach(id=>{
+    const el = document.getElementById(id);
+    el.value="";
+    el.classList.remove("campo-invalido");
+  });
   document.getElementById("capDescripcionPreview").classList.remove("mostrar","no-encontrado");
   document.getElementById("capDescripcionPreview").textContent = "";
   if(selProveedor === "__manual__"){
