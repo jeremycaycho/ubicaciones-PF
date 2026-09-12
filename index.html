@@ -50,6 +50,23 @@
   .field input, .field select{width:100%; padding:11px 12px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:15px;}
   .field input:focus, .field select:focus{outline:none; border-color:var(--accent);}
   .field .hint{font-size:11px; color:var(--muted); margin-top:4px;}
+  .input-con-repetir{position:relative;}
+  .input-con-repetir input[type="text"], .input-con-repetir input[type="number"]{padding-right:42px;}
+  .input-con-repetir .split-row{padding-right:34px;}
+  .repetir-radio{position:absolute; top:50%; right:12px; transform:translateY(-50%); display:flex; align-items:center; z-index:2;}
+  .repetir-radio input{
+    -webkit-appearance:none; appearance:none;
+    width:16px; height:16px; margin:0; border-radius:50%;
+    border:2px solid var(--border); background:var(--card2); cursor:pointer;
+  }
+  .repetir-radio input:checked{
+    border-color:var(--accent); background:var(--accent);
+    box-shadow: inset 0 0 0 2.5px var(--card2);
+  }
+  #tablaBuscarCodigo{width:100%; padding:11px 12px 11px 36px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:14px; box-sizing:border-box;}
+  #tablaBuscarCodigo:focus{outline:none; border-color:var(--accent);}
+  .buscar-wrap{position:relative;}
+  .buscar-icono{position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:14px; pointer-events:none;}
   .descripcion-preview{
     display:none;
     margin-top:6px;
@@ -231,26 +248,38 @@
     </div>
     <div class="field">
       <label>Código</label>
-      <input type="text" id="capCodigo" placeholder="Digitar código" inputmode="text" autocapitalize="characters">
+      <div class="input-con-repetir">
+        <input type="text" id="capCodigo" placeholder="Digitar código" inputmode="text" autocapitalize="characters">
+        <span class="repetir-radio" title="Repetir el último valor de hoy"><input type="checkbox" id="chkRepetirCodigo"></span>
+      </div>
       <div class="descripcion-preview" id="capDescripcionPreview"></div>
     </div>
     <div class="field">
       <label>Lote</label>
-      <input type="text" id="capLote" placeholder="Digitar lote">
+      <div class="input-con-repetir">
+        <input type="text" id="capLote" placeholder="Digitar lote">
+        <span class="repetir-radio" title="Repetir el último valor de hoy"><input type="checkbox" id="chkRepetirLote"></span>
+      </div>
     </div>
     <div class="field">
       <label>Fecha de vencimiento</label>
-      <div class="split-row">
-        <input type="text" id="capDD" class="w-sm" placeholder="DD" inputmode="numeric" maxlength="2">
-        <span>-</span>
-        <input type="text" id="capMM" class="w-sm" placeholder="MM" inputmode="numeric" maxlength="2">
-        <span>-</span>
-        <input type="text" id="capAA" class="w-sm" placeholder="AA" inputmode="numeric" maxlength="2">
+      <div class="input-con-repetir">
+        <div class="split-row">
+          <input type="text" id="capDD" class="w-sm" placeholder="DD" inputmode="numeric" maxlength="2">
+          <span>-</span>
+          <input type="text" id="capMM" class="w-sm" placeholder="MM" inputmode="numeric" maxlength="2">
+          <span>-</span>
+          <input type="text" id="capAA" class="w-sm" placeholder="AA" inputmode="numeric" maxlength="2">
+        </div>
+        <span class="repetir-radio" title="Repetir el último valor de hoy"><input type="checkbox" id="chkRepetirVcto"></span>
       </div>
     </div>
     <div class="field">
       <label>Cantidad</label>
-      <input type="number" id="capCantidad" placeholder="0" inputmode="numeric">
+      <div class="input-con-repetir">
+        <input type="number" id="capCantidad" placeholder="0" inputmode="numeric">
+        <span class="repetir-radio" title="Repetir el último valor de hoy"><input type="checkbox" id="chkRepetirCantidad"></span>
+      </div>
     </div>
     <div class="field">
       <label>Ubicación</label>
@@ -283,6 +312,10 @@
       <span class="back" id="backFromTabla">←</span>
       <h1 id="tablaTitle">Proveedor</h1>
       <span style="width:20px;"></span>
+    </div>
+    <div class="buscar-wrap">
+      <span class="buscar-icono">🔎</span>
+      <input type="text" id="tablaBuscarCodigo" placeholder="Buscar por código..." inputmode="text">
     </div>
     <div class="table-scroll">
       <table>
@@ -516,7 +549,7 @@ document.getElementById("modalEditarConfirmar").addEventListener("click", ()=>{
   editarCampoLocal(id, campo, valor);
   // Refresca la pantalla visible para que el cambio se vea al instante
   if(document.getElementById("screen-tabla").classList.contains("active")){
-    openTabla(document.getElementById("tablaTitle").textContent);
+    renderTablaProveedor();
   }
   if(document.getElementById("screen-historial-tabla").classList.contains("active")){
     renderHistorialTablaBody();
@@ -594,7 +627,7 @@ document.getElementById("modalBorrarConfirmar").addEventListener("click", ()=>{
   cerrarModalBorrar();
   borrarFilaLocal(id);
   if(document.getElementById("screen-tabla").classList.contains("active")){
-    openTabla(document.getElementById("tablaTitle").textContent);
+    renderTablaProveedor();
   }
   if(document.getElementById("screen-historial-tabla").classList.contains("active")){
     renderHistorialTablaBody();
@@ -651,6 +684,7 @@ async function tryLogin(){
     }
   }
 }
+let sincronizacionYaIniciada = false;
 function completarLogin(user, cambioUsado){
   currentUser = user;
   cambioPinDisponible = !cambioUsado;
@@ -661,6 +695,14 @@ function completarLogin(user, cambioUsado){
   showScreen("screen-home");
   currentPin=""; renderPin();
   hideLoading();
+  // La sincronización de fondo arranca recién aquí, la primera vez que alguien se
+  // loguea con éxito -- nunca antes, para no competirle señal a la verificación del PIN.
+  // Si alguien cierra sesión y vuelve a entrar en la misma sesión del navegador, no se
+  // vuelve a arrancar un segundo ciclo (ya está corriendo desde el primer login).
+  if(!sincronizacionYaIniciada){
+    sincronizacionYaIniciada = true;
+    iniciarSincronizacionDeFondo();
+  }
 }
 function actualizarMenuUsuario(){
   document.getElementById("menuCambiarPin").style.display = cambioPinDisponible ? "" : "none";
@@ -872,7 +914,9 @@ async function descargarCatalogoEnSegundoPlano(){
     }
   }catch(err){ /* sin conexión: se reintenta la próxima vez que se abra la app */ }
 }
-descargarCatalogoEnSegundoPlano();
+// La descarga del catálogo también arranca recién después de loguearse (ver
+// iniciarSincronizacionDeFondo), no aquí -- por el mismo motivo: no competirle señal
+// a la verificación del PIN, sin importar cuánto tarde alguien en escribirlo.
 
 const STORAGE_DESC_CACHE = "ubicaciones_descripciones_lru_v1";
 const LIMITE_CACHE_DESCRIPCIONES = 300; // ahora es solo un "acceso directo" a lo último tipeado; pesa muy poco
@@ -1026,6 +1070,53 @@ function modoUbicacionActual(){
 }
 
 /* ---------- GUARDAR FILA ---------- */
+/* ---------- REPETIR ÚLTIMO VALOR (Código, Lote, Vencimiento, Cantidad) ----------
+   Solo mira lo ingresado el mismo día de hoy -- pensado para cuando se repite el mismo
+   producto varias veces seguidas (por ejemplo, mismo código a distintas ubicaciones). */
+function obtenerUltimoValorHoy(){
+  const hoy = todayKey();
+  const filas = loadRows().filter(r=>r.fechaKey===hoy);
+  if(filas.length===0) return null;
+  return filas.reduce((a,b)=> (a.id > b.id ? a : b));
+}
+function aplicarRepetirCodigo(){
+  const u = obtenerUltimoValorHoy();
+  if(!u){ showToast("Aún no hay ningún registro de hoy para repetir"); document.getElementById("chkRepetirCodigo").checked=false; return; }
+  document.getElementById("capCodigo").value = u.codigo || "";
+  document.getElementById("capCodigo").dispatchEvent(new Event("input"));
+}
+function aplicarRepetirLote(){
+  const u = obtenerUltimoValorHoy();
+  if(!u){ showToast("Aún no hay ningún registro de hoy para repetir"); document.getElementById("chkRepetirLote").checked=false; return; }
+  document.getElementById("capLote").value = u.lote || "";
+}
+function aplicarRepetirVcto(){
+  const u = obtenerUltimoValorHoy();
+  if(!u || !u.vcto){ showToast("Aún no hay ningún registro de hoy para repetir"); document.getElementById("chkRepetirVcto").checked=false; return; }
+  const partes = String(u.vcto).split("-");
+  if(partes.length===3){
+    capDD.value = partes[0]; capMM.value = partes[1]; capAA.value = partes[2];
+  }
+}
+function aplicarRepetirCantidad(){
+  const u = obtenerUltimoValorHoy();
+  if(!u){ showToast("Aún no hay ningún registro de hoy para repetir"); document.getElementById("chkRepetirCantidad").checked=false; return; }
+  document.getElementById("capCantidad").value = u.cantidad || "";
+}
+document.getElementById("chkRepetirCodigo").addEventListener("change", (e)=>{ if(e.target.checked) aplicarRepetirCodigo(); });
+document.getElementById("chkRepetirLote").addEventListener("change", (e)=>{ if(e.target.checked) aplicarRepetirLote(); });
+document.getElementById("chkRepetirVcto").addEventListener("change", (e)=>{ if(e.target.checked) aplicarRepetirVcto(); });
+document.getElementById("chkRepetirCantidad").addEventListener("change", (e)=>{ if(e.target.checked) aplicarRepetirCantidad(); });
+// Si el check se queda marcado, se vuelve a aplicar solo después de guardar una fila
+// (así se puede repetir el mismo código/lote/vencimiento/cantidad varias veces seguidas,
+// cambiando solo la ubicación cada vez).
+function reaplicarChecksRepetir(){
+  if(document.getElementById("chkRepetirCodigo").checked) aplicarRepetirCodigo();
+  if(document.getElementById("chkRepetirLote").checked) aplicarRepetirLote();
+  if(document.getElementById("chkRepetirVcto").checked) aplicarRepetirVcto();
+  if(document.getElementById("chkRepetirCantidad").checked) aplicarRepetirCantidad();
+}
+
 document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   const selProveedor = document.getElementById("capProveedor").value;
   const proveedor = selProveedor === "__manual__"
@@ -1085,6 +1176,7 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   document.querySelector('input[name="modoUbic"][value="ubicacion"]').checked = true;
   document.getElementById("ubicacionCampos").style.display = "flex";
   showToast("Fila guardada");
+  reaplicarChecksRepetir();
   syncAll(); // se envía sola a Google Sheets al instante, sin botones
 });
 
@@ -1117,15 +1209,34 @@ function renderProveedores(){
     cont.appendChild(card);
   });
 }
+let tablaProveedorActual = null;
+let tablaBuscarTexto = "";
 function openTabla(prov){
+  tablaProveedorActual = prov;
+  tablaBuscarTexto = "";
+  document.getElementById("tablaBuscarCodigo").value = "";
   document.getElementById("tablaTitle").textContent = prov;
-  const rows = misRows().filter(r=>r.proveedor===prov)
+  renderTablaProveedor();
+  showScreen("screen-tabla");
+}
+// Vuelve a pintar la tabla del proveedor actual, respetando lo que haya en el buscador.
+// Es SOLO un filtro visual dentro del celular -- no toca ni consulta el Google Sheet.
+function renderTablaProveedor(){
+  if(!tablaProveedorActual) return;
+  let rows = misRows().filter(r=>r.proveedor===tablaProveedorActual)
     .sort((a,b)=> parseFechaKey(b.fechaKey) - parseFechaKey(a.fechaKey));
+  if(tablaBuscarTexto){
+    const q = tablaBuscarTexto.toUpperCase();
+    rows = rows.filter(r=> String(r.codigo||"").toUpperCase().includes(q));
+  }
   const body = document.getElementById("tablaBody");
   body.innerHTML = rows.map(r=> filaEditableTr(r, true)).join("");
   document.getElementById("tablaEmpty").style.display = rows.length ? "none" : "block";
-  showScreen("screen-tabla");
 }
+document.getElementById("tablaBuscarCodigo").addEventListener("input", (e)=>{
+  tablaBuscarTexto = e.target.value.trim();
+  renderTablaProveedor();
+});
 
 /* ---------- HISTORIAL: 1) fechas (tarjetas) → 2) proveedores de esa fecha (tarjetas) → 3) tabla ---------- */
 function renderHistorial(){
@@ -1325,7 +1436,7 @@ async function syncAll(){
     if(document.getElementById("screen-historial-detalle").classList.contains("active")) renderHistorialDetalleBody();
     if(document.getElementById("screen-historial-tabla").classList.contains("active")) renderHistorialTablaBody();
     if(document.getElementById("screen-tabla").classList.contains("active")){
-      openTabla(document.getElementById("tablaTitle").textContent);
+      renderTablaProveedor();
     }
   }catch(err){ /* sin conexión: se reintenta en el próximo ciclo, sin molestar al usuario */ }
   finally{
@@ -1334,18 +1445,21 @@ async function syncAll(){
   }
 }
 
-// Arranca apenas carga la app, y sigue revisando en segundo plano sin ningún botón.
-// Mientras hace la primera sincronización, se muestra el montacargas cargando
-// (con un tope de 4 segundos por si no hay señal, para no dejarlo pegado).
-showLoading("Cargando...");
-const topeCargaInicial = setTimeout(hideLoading, 4000);
-syncAll().finally(()=>{ clearTimeout(topeCargaInicial); hideLoading(); });
-// Si el usuario está escribiendo justo en este momento, el ciclo de sincronización
-// automática se salta esta vuelta -- así no compite por el procesador del equipo
-// mientras se tipea (en equipos con poco procesador, como el Honeywell, eso se
-// sentía como que la app "se lenteaba" al escribir).
-setInterval(()=>{ if(navigator.onLine && !haActividadReciente()) syncAll(); }, 15000);
-window.addEventListener("online", syncAll);
+// La sincronización de fondo (y su ciclo automático cada 15s) ya NO arranca apenas
+// carga la app -- arranca recién DESPUÉS de loguearse, dentro de completarLogin().
+// Antes arrancaba en este mismo instante en que se abre la app, y como Apps Script
+// solo puede atender cierta cantidad de peticiones a la vez, si alguien tocaba
+// "Ingresar" justo en esos primeros segundos, la verificación del PIN se quedaba
+// esperando en la fila detrás de esa sincronización (que lee toda la tabla
+// "Registros") -- eso era lo que hacía sentir el login lento.
+function iniciarSincronizacionDeFondo(){
+  syncAll();
+  setInterval(()=>{ if(navigator.onLine && !haActividadReciente()) syncAll(); }, 15000);
+  window.addEventListener("online", syncAll);
+  // Con un pequeño respiro (2s) para que la sincronización recién iniciada no se pise
+  // con la descarga del catálogo -- ambas compitiendo por señal al mismo tiempo.
+  setTimeout(descargarCatalogoEnSegundoPlano, 2000);
+}
 
 // Registro del service worker: permite instalar la app (ícono propio, pantalla completa)
 // y que siga abriendo aunque no haya señal en el almacén.
