@@ -63,8 +63,8 @@
     border-color:var(--accent); background:var(--accent);
     box-shadow: inset 0 0 0 2.5px var(--card2);
   }
-  #tablaBuscarCodigo{width:100%; padding:11px 12px 11px 36px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:14px; box-sizing:border-box;}
-  #tablaBuscarCodigo:focus{outline:none; border-color:var(--accent);}
+  #tablaBuscarCodigo, #histTablaBuscarCodigo{width:100%; padding:11px 12px 11px 36px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:14px; box-sizing:border-box;}
+  #tablaBuscarCodigo:focus, #histTablaBuscarCodigo:focus{outline:none; border-color:var(--accent);}
   .buscar-wrap{position:relative;}
   .buscar-icono{position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:14px; pointer-events:none;}
   .descripcion-preview{
@@ -352,6 +352,10 @@
       <span class="back" id="backFromHistTabla">←</span>
       <h1 id="histTablaTitle">Proveedor</h1>
       <span style="width:20px;"></span>
+    </div>
+    <div class="buscar-wrap">
+      <span class="buscar-icono">🔎</span>
+      <input type="text" id="histTablaBuscarCodigo" placeholder="Buscar por código..." inputmode="text">
     </div>
     <div class="table-scroll">
       <table>
@@ -697,11 +701,13 @@ function completarLogin(user, cambioUsado){
   hideLoading();
   // La sincronización de fondo arranca recién aquí, la primera vez que alguien se
   // loguea con éxito -- nunca antes, para no competirle señal a la verificación del PIN.
-  // Si alguien cierra sesión y vuelve a entrar en la misma sesión del navegador, no se
-  // vuelve a arrancar un segundo ciclo (ya está corriendo desde el primer login).
+  // Se retrasa con un setTimeout(0) a propósito: así el navegador termina de pintar la
+  // pantalla del formulario ANTES de que arranque cualquier trabajo de sincronización,
+  // en vez de que ambas cosas compitan en el mismo instante (eso se sentía como que
+  // tardaba en pasar del login al formulario).
   if(!sincronizacionYaIniciada){
     sincronizacionYaIniciada = true;
-    iniciarSincronizacionDeFondo();
+    setTimeout(iniciarSincronizacionDeFondo, 0);
   }
 }
 function actualizarMenuUsuario(){
@@ -1241,24 +1247,31 @@ document.getElementById("tablaBuscarCodigo").addEventListener("input", (e)=>{
 /* ---------- HISTORIAL: 1) fechas (tarjetas) → 2) proveedores de esa fecha (tarjetas) → 3) tabla ---------- */
 function renderHistorial(){
   const rows = misRows();
-  const fechas = [...new Set(rows.map(r=>r.fechaKey))]
-    .sort((a,b)=> parseFechaKey(b) - parseFechaKey(a));
+  // Una sola pasada por todas las filas (antes se recorría la lista completa de nuevo
+  // por cada fecha, para contar proveedores -- con varios días acumulados, eso se sentía).
+  const proveedoresPorFecha = new Map(); // fechaKey -> Set de proveedores de ese día
+  rows.forEach(r=>{
+    if(!proveedoresPorFecha.has(r.fechaKey)) proveedoresPorFecha.set(r.fechaKey, new Set());
+    proveedoresPorFecha.get(r.fechaKey).add(r.proveedor);
+  });
+  const fechas = [...proveedoresPorFecha.keys()].sort((a,b)=> parseFechaKey(b) - parseFechaKey(a));
   const cont = document.getElementById("historialCards");
   cont.innerHTML = "";
   if(fechas.length === 0){
     cont.innerHTML = '<div class="empty-msg">Aún no hay registros.</div>';
     return;
   }
+  const frag = document.createDocumentFragment();
   fechas.forEach(fk=>{
-    const rowsFecha = rows.filter(r=>r.fechaKey===fk);
-    const cantProv = new Set(rowsFecha.map(r=>r.proveedor)).size;
+    const cantProv = proveedoresPorFecha.get(fk).size;
     const texto = cantProv === 1 ? "1 proveedor" : `${cantProv} proveedores`;
     const card = document.createElement("div");
     card.className = "prov-card";
     card.innerHTML = `<div class="name">${fk}</div><div class="meta"><span>${texto}</span><span>›</span></div>`;
     card.addEventListener("click", ()=> openHistorialDetalle(fk));
-    cont.appendChild(card);
+    frag.appendChild(card);
   });
+  cont.appendChild(frag); // se agrega todo de una vez, no una tarjeta a la vez
 }
 
 let histDetalleFecha = null;
@@ -1274,36 +1287,54 @@ function openHistorialDetalle(fk){
 function renderHistorialDetalleBody(){
   if(!histDetalleFecha) return;
   const rowsFecha = misRows().filter(r=>r.fechaKey===histDetalleFecha);
-  const proveedores = [...new Set(rowsFecha.map(r=>r.proveedor))];
+  // Una sola pasada agrupando por proveedor (antes se volvía a filtrar rowsFecha
+  // completo por cada proveedor para contar sus filas).
+  const porProveedor = new Map();
+  rowsFecha.forEach(r=>{
+    if(!porProveedor.has(r.proveedor)) porProveedor.set(r.proveedor, 0);
+    porProveedor.set(r.proveedor, porProveedor.get(r.proveedor) + 1);
+  });
   const cont = document.getElementById("histDetalleBody");
   cont.innerHTML = "";
-  if(proveedores.length === 0){
+  if(porProveedor.size === 0){
     cont.innerHTML = '<div class="empty-msg">Sin proveedores para esta fecha.</div>';
     return;
   }
-  proveedores.forEach(prov=>{
-    const provRows = rowsFecha.filter(r=>r.proveedor===prov);
+  const frag = document.createDocumentFragment();
+  porProveedor.forEach((cantidad, prov)=>{
     const card = document.createElement("div");
     card.className = "prov-card";
-    card.innerHTML = `<div class="name">${prov}</div><div class="meta"><span>${provRows.length} filas</span><span>›</span></div>`;
+    card.innerHTML = `<div class="name">${prov}</div><div class="meta"><span>${cantidad} filas</span><span>›</span></div>`;
     card.addEventListener("click", ()=> openHistorialTabla(prov));
-    cont.appendChild(card);
+    frag.appendChild(card);
   });
+  cont.appendChild(frag);
 }
 
 // Pantalla 3: tabla final con las filas de ese proveedor en esa fecha (esta es la que
 // se ensancha al girar el celular)
+let histTablaBuscarTexto = "";
 function openHistorialTabla(prov){
   histTablaProveedor = prov;
+  histTablaBuscarTexto = "";
+  document.getElementById("histTablaBuscarCodigo").value = "";
   document.getElementById("histTablaTitle").textContent = prov + " · " + histDetalleFecha;
   renderHistorialTablaBody();
   showScreen("screen-historial-tabla");
 }
 function renderHistorialTablaBody(){
   if(!histDetalleFecha || !histTablaProveedor) return;
-  const rows = misRows().filter(r=>r.fechaKey===histDetalleFecha && r.proveedor===histTablaProveedor);
+  let rows = misRows().filter(r=>r.fechaKey===histDetalleFecha && r.proveedor===histTablaProveedor);
+  if(histTablaBuscarTexto){
+    const q = histTablaBuscarTexto.toUpperCase();
+    rows = rows.filter(r=> String(r.codigo||"").toUpperCase().includes(q));
+  }
   document.getElementById("histTablaBody").innerHTML = rows.map(r=> filaEditableTr(r, false)).join("");
 }
+document.getElementById("histTablaBuscarCodigo").addEventListener("input", (e)=>{
+  histTablaBuscarTexto = e.target.value.trim();
+  renderHistorialTablaBody();
+});
 
 /* ---------- SINCRONIZACIÓN: 100% AUTOMÁTICA, sin botones (estadísticas de MI usuario) ---------- */
 function renderSyncScreen(){
