@@ -1445,6 +1445,14 @@ async function syncAll(){
   }
 }
 
+// La pantalla de carga (el montacargas) empieza visible por defecto en el HTML -- antes
+// se ocultaba sola como parte del código de sincronización que arrancaba al abrir la app.
+// Al mover esa sincronización para después del login, se quedó sin nada que la oculte
+// al inicio, y por eso se quedaba pegada tapando el login. Se corrige con esta única
+// línea: se oculta de inmediato al cargar la página. El montacargas sigue intacto y se
+// sigue mostrando igual que siempre durante "Verificando..." al tocar Ingresar.
+hideLoading();
+
 // La sincronización de fondo (y su ciclo automático cada 15s) ya NO arranca apenas
 // carga la app -- arranca recién DESPUÉS de loguearse, dentro de completarLogin().
 // Antes arrancaba en este mismo instante en que se abre la app, y como Apps Script
