@@ -578,7 +578,7 @@ function editarCampoLocal(id, campo, valor){
   if(cambio){
     saveRows(actualizado);
     showToast("Cambio guardado");
-    setTimeout(syncAll, 0);
+    syncAll();
   }
 }
 
@@ -604,10 +604,7 @@ function borrarFilaLocal(id){
     guardarEliminacionesPendientes(pendientes);
   }
   showToast("Registro borrado");
-  // La sincronización (avisarle a Google Sheets) se dispara con un pequeño retraso, para
-  // que el borrado se vea al instante en el celular -- sin esperar por la red antes de
-  // volver a dibujar la tabla sin esa fila.
-  setTimeout(syncAll, 0);
+  syncAll();
 }
 
 let borrarIdActual = null;
@@ -1236,7 +1233,7 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   document.getElementById("ubicacionCampos").style.display = "flex";
   showToast("Fila guardada");
   reaplicarChecksRepetir();
-  setTimeout(syncAll, 0); // se envía sola a Google Sheets un instante después, para que el formulario se limpie al instante sin esperar
+  syncAll(); // se envía sola a Google Sheets al instante, sin botones
 });
 
 /* ---------- PANTALLA PROVEEDORES (tarjetas) ---------- */
@@ -1472,11 +1469,20 @@ async function pullTodos(){
   const data = await resp.json();
   if(!data.ok || !data.filas) return;
 
-  const pendientesLocales = loadRows().filter(r=>!r.sincronizado);
-  const idsPendientes = new Set(pendientesLocales.map(r=>String(r.id)));
+  // Protege de este "pull" cualquier fila que este dispositivo todavía tenga pendiente
+  // de enviar: recién creada (!sincronizado), con una edición esperando a mandarse
+  // (edicionPendiente), o marcada para borrar (todavía en la lista de eliminaciones
+  // pendientes). Sin esto, si la sincronización tardaba (por ejemplo, con varios
+  // usuarios guardando al mismo tiempo) y un "pull" llegaba justo antes de que la
+  // edición terminara de enviarse, el valor viejo del Sheet pisaba tu cambio recién
+  // hecho -- se veía como si la app "revirtiera" la edición sola.
+  const idsEliminacionPendiente = new Set(cargarEliminacionesPendientes());
+  const rowsActuales = loadRows();
+  const protegidas = rowsActuales.filter(r=> !r.sincronizado || r.edicionPendiente);
+  const idsProtegidos = new Set([...protegidas.map(r=>String(r.id)), ...idsEliminacionPendiente]);
 
   const desdeServidor = data.filas
-    .filter(s => !idsPendientes.has(String(s.id))) // evita duplicar una fila que este mismo dispositivo recién creó
+    .filter(s => !idsProtegidos.has(String(s.id))) // evita pisar (o resucitar) algo pendiente de enviar
     .map(s => ({
       id: s.id,
       proveedor: s.proveedor, codigo: s.codigo, lote: s.lote, vcto: textoSeguro(s.vcto,"vcto"),
@@ -1486,7 +1492,7 @@ async function pullTodos(){
       sincronizado: true
     }));
 
-  saveRows([...pendientesLocales, ...desdeServidor]);
+  saveRows([...protegidas, ...desdeServidor]);
 }
 
 // Trae la lista OFICIAL de proveedores (hoja "Proveedores", columna FAMILIA) y reemplaza
