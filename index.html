@@ -131,6 +131,27 @@
   .modal-botones{display:flex; gap:10px;}
   .modal-botones .btn{margin:0;}
 
+
+  /* ---- Vista de revisión (YUBICKSA / EDWIN) ---- */
+  .tabs-rev{display:flex; gap:8px;}
+  .tabs-rev button{flex:1; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--card2); color:var(--muted); font-size:13.5px; font-weight:600;}
+  .tabs-rev button.activa{background:var(--accent-soft); border-color:var(--accent); color:var(--text);}
+  .chips-rev{display:flex; gap:6px; flex-wrap:wrap;}
+  .chips-rev button{padding:6px 11px; border-radius:20px; border:1px solid var(--border); background:var(--card2); color:var(--muted); font-size:12px; font-weight:600;}
+  .chips-rev button.activa{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .rev-resumen{font-size:12px; color:var(--muted);}
+  .btn-copiar{background:transparent; border:none; color:var(--muted); padding:3px 4px; cursor:pointer; line-height:1; vertical-align:middle;}
+  .btn-copiar svg{display:block;}
+  .btn-copiar:active{opacity:.5;}
+  .estado-btn{border:none; cursor:pointer; font-family:inherit;}
+  .estado-btn:active{opacity:.7;}
+  .barra{height:7px; border-radius:6px; background:var(--card2); overflow:hidden; margin:8px 0 6px;}
+  .barra > span{display:block; height:100%; background:var(--verde);}
+  .prov-card.completo{opacity:.7; border-color:var(--verde);}
+  .quien{font-size:11.5px; color:var(--muted); margin-top:4px; line-height:1.5;}
+  .quien b{color:var(--text); font-weight:600;}
+  .modal-caja .btn{margin-bottom:8px;}
+
   .hist-prov-block{margin-bottom:10px;}
   .hist-prov-header{width:100%; display:flex; justify-content:space-between; align-items:center; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:12px 14px; color:var(--text); font-size:13.5px; font-weight:600; cursor:pointer;}
   .hist-prov-header:active{background:var(--card2);}
@@ -223,6 +244,8 @@
         <option>RNORIEGA</option>
         <option>JGUILLEN</option>
         <option>MMONTALVO</option>
+        <option>YUBICKSA</option>
+        <option>EDWIN</option>
       </select>
       <div class="pin-dots" id="pinDots">
         <span></span><span></span><span></span><span></span>
@@ -367,6 +390,54 @@
     </div>
   </div>
 
+  <!-- REVISIÓN (solo YUBICKSA / EDWIN): todos los registros de todos los usuarios -->
+  <div class="screen" id="screen-revision">
+    <div class="topbar">
+      <h1>Registros</h1>
+      <span class="menu-btn" id="btnMenuRev">☰</span>
+    </div>
+    <div class="who-line"><span class="revUser"></span></div>
+    <div class="tabs-rev">
+      <button data-go="revision" class="activa">📋 Registros</button>
+      <button data-go="avance" class="">📊 Avance</button>
+    </div>
+    <div class="field" style="margin:0;">
+      <label>Proveedor</label>
+      <select id="revProveedor"></select>
+    </div>
+    <div class="chips-rev" data-grupo="dia"><button data-v="hoy">Hoy</button><button data-v="todo">Todos los días</button></div>
+    <div class="chips-rev" data-grupo="estado">
+      <button data-v="pendientes">Pendientes</button><button data-v="todos">Todos</button><button data-v="ingresado">Ingresados</button><button data-v="corregir_lote">Corregir lote</button>
+    </div>
+    <div class="buscar-wrap">
+      <span class="buscar-icono">🔎</span>
+      <input type="text" id="revBuscar" placeholder="Buscar por código..." inputmode="text" style="width:100%; padding:11px 12px 11px 36px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:14px; box-sizing:border-box;">
+    </div>
+    <div class="rev-resumen" id="revResumen"></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Estado</th><th>Código</th><th>Ubicación</th><th>UDC</th><th>Lote</th><th>Cant.</th><th>Registró</th><th>Vcto</th></tr></thead>
+        <tbody id="revBody"></tbody>
+      </table>
+    </div>
+    <div class="empty-msg" id="revEmpty" style="display:none;">No hay registros con este filtro.</div>
+  </div>
+
+  <!-- AVANCE (solo YUBICKSA / EDWIN): tarjetas por proveedor -->
+  <div class="screen" id="screen-avance">
+    <div class="topbar">
+      <h1>Avance por proveedor</h1>
+      <span class="menu-btn" id="btnMenuAv">☰</span>
+    </div>
+    <div class="who-line"><span class="revUser"></span></div>
+    <div class="tabs-rev">
+      <button data-go="revision" class="">📋 Registros</button>
+      <button data-go="avance" class="activa">📊 Avance</button>
+    </div>
+    <div class="chips-rev" data-grupo="dia"><button data-v="hoy">Hoy</button><button data-v="todo">Todos los días</button></div>
+    <div class="cards" id="avanceCards"></div>
+  </div>
+
   <!-- SINCRONIZACIÓN (solo informativa, todo es automático) -->
   <div class="screen" id="screen-sync">
     <div class="topbar">
@@ -391,6 +462,8 @@
 <div class="menu-overlay" id="menuOverlay">
   <div class="menu-panel">
     <h3>Menú</h3>
+    <button class="menu-item" id="menuRevision" style="display:none;"><span class="ico">📋</span> Registros</button>
+    <button class="menu-item" id="menuAvance" style="display:none;"><span class="ico">📊</span> Avance por proveedor</button>
     <button class="menu-item" id="menuProveedores"><span class="ico">📋</span> Proveedores</button>
     <button class="menu-item" id="menuHistorial"><span class="ico">🕒</span> Historial diario</button>
     <button class="menu-item" id="menuSync"><span class="ico">☁️</span> Sincronización</button>
@@ -408,6 +481,17 @@
       <button class="btn btn-outline" id="modalEditarCancelar">Cancelar</button>
       <button class="btn btn-accent" id="modalEditarConfirmar">Confirmar</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalEstadoOverlay">
+  <div class="modal-caja">
+    <h3 id="modalEstadoTitulo">Estado</h3>
+    <p id="modalEstadoDetalle" style="color:var(--muted); font-size:13px; margin:0 0 14px;"></p>
+    <button class="btn btn-accent" data-est="ingresado" id="btnEstIngresado">Ingresado</button>
+    <button class="btn" data-est="corregir_lote">⚠️ Corregir lote</button>
+    <button class="btn" data-est="no_ingresado">↩ No ingresado</button>
+    <button class="btn btn-outline" id="modalEstadoCancelar">Cancelar</button>
   </div>
 </div>
 
@@ -436,7 +520,7 @@ let currentPin = "";
 let lastSyncAt = null;
 
 /* ---------- Utilidades ---------- */
-const PANTALLAS_TABLA_ANCHA = ["screen-tabla", "screen-historial-tabla"];
+const PANTALLAS_TABLA_ANCHA = ["screen-tabla", "screen-historial-tabla", "screen-revision"];
 function showScreen(id){
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
@@ -699,7 +783,8 @@ function completarLogin(user, cambioUsado){
   document.getElementById("capDate").textContent = todayKey();
   renderProveedorSelect();
   actualizarMenuUsuario();
-  showScreen("screen-home");
+  if(esRevisor()){ iniciarVistaRevision(); showScreen("screen-revision"); }
+  else showScreen("screen-home");
   currentPin=""; renderPin();
   hideLoading();
   // La sincronización de fondo arranca recién aquí, la primera vez que alguien se
@@ -716,12 +801,216 @@ function completarLogin(user, cambioUsado){
 function actualizarMenuUsuario(){
   document.getElementById("menuCambiarPin").style.display = cambioPinDisponible ? "" : "none";
   document.getElementById("menuAdminUsuarios").style.display = (currentUser === USUARIO_ADMIN) ? "" : "none";
+  // Los revisores (YUBICKSA / EDWIN) no capturan: ven la vista de revisión en lugar de la captura
+  const rev = esRevisor();
+  ["menuRevision","menuAvance"].forEach(id=> document.getElementById(id).style.display = rev ? "" : "none");
+  ["menuProveedores","menuHistorial"].forEach(id=> document.getElementById(id).style.display = rev ? "none" : "");
 }
 function logout(){
   currentUser = null; currentPin=""; renderPin();
   document.getElementById("loginUser").value = "";
   closeMenu();
   showScreen("screen-login");
+}
+
+
+/* ---------- VISTA DE REVISIÓN (solo YUBICKSA y EDWIN) ----------
+   Ven los registros de TODOS los usuarios, filtran por proveedor y marcan cada fila como
+   Ingresado / Corregir lote / No ingresado. El cambio se manda a la hoja Registros (columna
+   Estado). Los demás usuarios no ven nada de esto y su app funciona exactamente igual. */
+const USUARIOS_REVISORES = ["YUBICKSA","EDWIN"];
+function esRevisor(){ return USUARIOS_REVISORES.includes(currentUser); }
+function nombreBonito(u){ u = String(u||""); return u.charAt(0).toUpperCase() + u.slice(1).toLowerCase(); }
+let revProv = "", revEstado = "pendientes", revDia = "hoy", revBuscar = "", revOpcionesFirma = "";
+
+function textoEstadoPara(est){
+  if(est === "ingresado") return "Ingresado por " + nombreBonito(currentUser);
+  if(est === "corregir_lote") return "Corregir lote";
+  return "No ingresado";
+}
+function quienIngreso(r){
+  const m = String(r.estadoTexto||"").match(/^Ingresado por (.+)$/);
+  return m ? m[1] : "";
+}
+function revFilasDelDia(){
+  const hoy = todayKey();
+  return loadRows().filter(r=> revDia === "todo" || r.fechaKey === hoy);
+}
+function iniciarVistaRevision(){
+  document.querySelectorAll(".revUser").forEach(el=> el.textContent = currentUser + " · " + todayKey());
+  marcarChips();
+  renderRevision();
+}
+function marcarChips(){
+  document.querySelectorAll('.chips-rev[data-grupo="dia"] button').forEach(b=> b.classList.toggle("activa", b.dataset.v === revDia));
+  document.querySelectorAll('.chips-rev[data-grupo="estado"] button').forEach(b=> b.classList.toggle("activa", b.dataset.v === revEstado));
+}
+function irAPestanaRevision(cual){
+  if(cual === "avance"){ renderAvance(); showScreen("screen-avance"); }
+  else { renderRevision(); showScreen("screen-revision"); }
+}
+// Ícono estándar de "copiar" (dos hojas superpuestas)
+const ICONO_COPIAR = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+// Celda con el valor y un ícono para copiarlo al portapapeles (solo el UDC en la vista de revisión)
+function celdaCopiable(valor){
+  const v = String(valor == null ? "" : valor).trim();
+  if(!v || v === "-") return '<span style="color:var(--muted);">—</span>';
+  return `<span>${escAttr(v)}</span> <button class="btn-copiar" data-copiar="${escAttr(v)}" aria-label="Copiar" title="Copiar">${ICONO_COPIAR}</button>`;
+}
+function copiarTexto(texto){
+  const ok = ()=> showToast("Copiado: " + texto);
+  const respaldo = ()=>{
+    try{
+      const ta = document.createElement("textarea");
+      ta.value = texto; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      const bien = document.execCommand("copy"); document.body.removeChild(ta);
+      bien ? ok() : showToast("No se pudo copiar");
+    }catch(_e){ showToast("No se pudo copiar"); }
+  };
+  if(navigator.clipboard && window.isSecureContext){ navigator.clipboard.writeText(texto).then(ok, respaldo); }
+  else respaldo();
+}
+function renderRevision(desdeSync){
+  const base = revFilasDelDia();
+  // opciones del selector de proveedor: solo se reconstruye si cambió la lista (para no cerrar el desplegable mientras se usa)
+  const conteo = new Map();
+  base.forEach(r=>{ if(!conteo.has(r.proveedor)) conteo.set(r.proveedor,0); if(r.estado==="no_ingresado") conteo.set(r.proveedor, conteo.get(r.proveedor)+1); });
+  const provs = [...conteo.keys()].sort();
+  const firma = revDia + "|" + provs.map(p=>p+":"+conteo.get(p)).join(",");
+  const sel = document.getElementById("revProveedor");
+  if(firma !== revOpcionesFirma){
+    revOpcionesFirma = firma;
+    if(revProv && !provs.includes(revProv) && !desdeSync) revProv = "";
+    sel.innerHTML = '<option value="">Todos los proveedores</option>' +
+      provs.map(p=>`<option value="${escAttr(p)}">${escAttr(p)} (${conteo.get(p)} pend.)</option>`).join("");
+  }
+  sel.value = provs.includes(revProv) ? revProv : "";
+  let rows = base.filter(r=> !revProv || r.proveedor === revProv);
+  const totalProv = rows.length;
+  const pend = rows.filter(r=>r.estado==="no_ingresado").length;
+  if(revEstado === "pendientes") rows = rows.filter(r=>r.estado==="no_ingresado");
+  else if(revEstado === "ingresado") rows = rows.filter(r=>r.estado==="ingresado");
+  else if(revEstado === "corregir_lote") rows = rows.filter(r=>r.estado==="corregir_lote");
+  if(revBuscar){ const q = revBuscar.toUpperCase(); rows = rows.filter(r=> String(r.codigo||"").toUpperCase().includes(q)); }
+  rows.sort((a,b)=> Number(a.id) - Number(b.id)); // el orden en que se fueron registrando
+  document.getElementById("revResumen").textContent = totalProv + " registros · " + pend + " pendientes" + (revProv ? " · " + revProv : "");
+  document.getElementById("revBody").innerHTML = rows.map(r=>{
+    const est = estadoInfo(r.estado);
+    const quien = quienIngreso(r);
+    const texto = r.estado === "ingresado" && quien ? "Ingresado · " + escAttr(quien) : est.texto;
+    return `<tr>
+      <td><button class="estado-pill estado-btn ${est.clase}" data-rev-id="${escAttr(r.id)}">${texto}</button></td>
+      <td>${escAttr(r.codigo)}</td>
+      <td>${escAttr(r.ubicacion)}</td><td>${celdaCopiable(r.udc)}</td>
+      <td>${escAttr(r.lote)}</td><td>${escAttr(r.cantidad)}</td><td>${escAttr(r.usuario)}</td><td>${escAttr(r.vcto)}</td>
+    </tr>`;
+  }).join("");
+  document.getElementById("revEmpty").style.display = rows.length ? "none" : "block";
+  marcarChips();
+}
+function renderAvance(){
+  const base = revFilasDelDia();
+  const grupos = new Map();
+  base.forEach(r=>{ if(!grupos.has(r.proveedor)) grupos.set(r.proveedor, []); grupos.get(r.proveedor).push(r); });
+  const cont = document.getElementById("avanceCards");
+  if(grupos.size === 0){
+    cont.innerHTML = '<div class="empty-msg">' + (revDia === "hoy" ? "Todavía no hay registros hoy." : "No hay registros.") + '</div>';
+    marcarChips(); return;
+  }
+  const lista = [...grupos.entries()].map(([prov, rows])=>{
+    const total = rows.length;
+    const ing = rows.filter(r=>r.estado==="ingresado").length;
+    const cor = rows.filter(r=>r.estado==="corregir_lote").length;
+    const pen = total - ing - cor;
+    return {prov, rows, total, ing, cor, pen};
+  }).sort((a,b)=> (b.pen>0) - (a.pen>0) || b.pen - a.pen || a.prov.localeCompare(b.prov));
+  cont.innerHTML = "";
+  lista.forEach(g=>{
+    const cuenta = (arr, f)=>{ const m = new Map(); arr.forEach(r=>{ const k=f(r); if(k) m.set(k,(m.get(k)||0)+1); }); return [...m.entries()].sort((a,b)=>b[1]-a[1]); };
+    const regPor = cuenta(g.rows, r=>r.usuario).map(([u,n])=>`<b>${escAttr(u)}</b> ${n}`).join(" · ");
+    const ingPor = cuenta(g.rows.filter(r=>r.estado==="ingresado"), quienIngreso).map(([u,n])=>`<b>${escAttr(u)}</b> ${n}`).join(" · ");
+    const ultima = g.rows.slice().sort((a,b)=>Number(b.id)-Number(a.id))[0];
+    const pct = g.total ? Math.round(g.ing*100/g.total) : 0;
+    const card = document.createElement("div");
+    card.className = "prov-card" + (g.pen===0 && g.cor===0 ? " completo" : "");
+    card.innerHTML = `
+      <div class="name">${escAttr(g.prov)}${g.pen===0 && g.cor===0 ? " ✅" : ""}</div>
+      <div class="meta"><span>${g.ing} de ${g.total} ingresados</span><span>${g.pen} pendientes${g.cor ? " · " + g.cor + " a corregir" : ""}</span></div>
+      <div class="barra"><span style="width:${pct}%"></span></div>
+      <div class="quien">Registran: ${regPor || "—"}</div>
+      ${ingPor ? `<div class="quien">Ingresaron: ${ingPor}</div>` : ""}
+      <div class="quien">Último registro: ${escAttr(ultima.hora||"")} por <b>${escAttr(ultima.usuario)}</b></div>`;
+    card.addEventListener("click", ()=>{ revProv = g.prov; revEstado = "pendientes"; revBuscar = ""; document.getElementById("revBuscar").value = ""; irAPestanaRevision("revision"); });
+    cont.appendChild(card);
+  });
+  marcarChips();
+}
+document.addEventListener("click", (e)=>{
+  const tab = e.target.closest(".tabs-rev button");
+  if(tab){ irAPestanaRevision(tab.dataset.go); return; }
+  const chip = e.target.closest(".chips-rev button");
+  if(chip){
+    const grupo = chip.parentElement.dataset.grupo;
+    if(grupo === "dia"){ revDia = chip.dataset.v; revOpcionesFirma = ""; } else { revEstado = chip.dataset.v; }
+    marcarChips();
+    if(document.getElementById("screen-avance").classList.contains("active")) renderAvance(); else renderRevision();
+    return;
+  }
+  const cop = e.target.closest("[data-copiar]");
+  if(cop){ copiarTexto(cop.dataset.copiar); return; }
+  const pill = e.target.closest("[data-rev-id]");
+  if(pill){ abrirModalEstado(pill.dataset.revId); }
+});
+document.getElementById("revProveedor").addEventListener("change", (e)=>{ revProv = e.target.value; renderRevision(); });
+document.getElementById("revBuscar").addEventListener("input", (e)=>{ revBuscar = e.target.value.trim(); renderRevision(); });
+document.getElementById("btnMenuRev").addEventListener("click", openMenu);
+document.getElementById("btnMenuAv").addEventListener("click", openMenu);
+document.getElementById("menuRevision").addEventListener("click", ()=>{ closeMenu(); irAPestanaRevision("revision"); });
+document.getElementById("menuAvance").addEventListener("click", ()=>{ closeMenu(); irAPestanaRevision("avance"); });
+
+let estadoFilaId = null;
+function abrirModalEstado(id){
+  const r = loadRows().find(x=> String(x.id) === String(id));
+  if(!r) return;
+  estadoFilaId = id;
+  document.getElementById("modalEstadoTitulo").textContent = r.codigo + " · Lote " + r.lote;
+  document.getElementById("modalEstadoDetalle").textContent = r.proveedor + " · " + r.ubicacion + " · registró " + r.usuario;
+  document.getElementById("btnEstIngresado").textContent = "✅ Ingresado por " + nombreBonito(currentUser);
+  document.getElementById("modalEstadoOverlay").classList.add("mostrar");
+}
+function cerrarModalEstado(){ document.getElementById("modalEstadoOverlay").classList.remove("mostrar"); estadoFilaId = null; }
+document.getElementById("modalEstadoCancelar").addEventListener("click", cerrarModalEstado);
+document.getElementById("modalEstadoOverlay").addEventListener("click", (e)=>{
+  if(e.target.id === "modalEstadoOverlay") { cerrarModalEstado(); return; }
+  const b = e.target.closest("[data-est]");
+  if(!b || estadoFilaId == null) return;
+  const id = estadoFilaId, est = b.dataset.est;
+  cerrarModalEstado();
+  const rows = loadRows().map(r=> String(r.id) === String(id)
+    ? {...r, estado: est, estadoTexto: textoEstadoPara(est), estadoPendiente: true} : r);
+  saveRows(rows);
+  renderRevision();
+  showToast(est === "ingresado" ? "Marcado como ingresado" : est === "corregir_lote" ? "Marcado: corregir lote" : "Vuelto a pendiente");
+  syncAll();
+});
+// Envía a Google Sheets los cambios de estado hechos aquí (solo los puede mandar un revisor).
+async function pushEstados(){
+  if(!esRevisor()) return;
+  const pendientes = loadRows().filter(r=>r.estadoPendiente);
+  if(pendientes.length === 0) return;
+  const enviados = new Map(pendientes.map(r=>[String(r.id), r.estadoTexto]));
+  const resp = await fetch(SHEET_WEB_APP_URL, {
+    method: "POST",
+    headers: {"Content-Type": "text/plain;charset=utf-8"},
+    body: JSON.stringify({ cambiosEstado: { solicitante: currentUser,
+      cambios: pendientes.map(r=>({ id: r.id, estado: r.estadoTexto })) } })
+  });
+  const data = await resp.json(); // si no se puede leer, queda pendiente y se reintenta
+  if(data && data.ok){
+    // solo se limpia lo que no volvió a cambiar mientras se enviaba
+    saveRows(loadRows().map(r=> (enviados.has(String(r.id)) && enviados.get(String(r.id)) === r.estadoTexto) ? {...r, estadoPendiente:false} : r));
+  }
 }
 
 /* ---------- CAMBIO DE CONTRASEÑA (propia, una sola vez) ---------- */
@@ -759,7 +1048,7 @@ document.getElementById("menuCambiarPin").addEventListener("click", async ()=>{
 /* ---------- GESTIÓN DE USUARIOS (solo JCAYCHO) ---------- */
 document.getElementById("menuAdminUsuarios").addEventListener("click", async ()=>{
   closeMenu();
-  const listaUsuarios = ["JCAYCHO","DCARRANZA","LILACHI","JFAJARDO","SFAJARDO","RCARREÑO","RNORIEGA","JGUILLEN","MMONTALVO"];
+  const listaUsuarios = ["JCAYCHO","DCARRANZA","LILACHI","JFAJARDO","SFAJARDO","RCARREÑO","RNORIEGA","JGUILLEN","MMONTALVO","YUBICKSA","EDWIN"];
   const elegido = prompt("¿A qué usuario le quieres cambiar la contraseña?\nEscribe el nombre exacto: " + listaUsuarios.join(", "));
   if(!elegido) return;
   const usuarioObjetivo = elegido.trim().toUpperCase();
@@ -804,7 +1093,7 @@ document.getElementById("backFromTabla").addEventListener("click", ()=>{ renderP
 document.getElementById("backFromHistorial").addEventListener("click", ()=> showScreen("screen-home"));
 document.getElementById("backFromHistDetalle").addEventListener("click", ()=>{ renderHistorial(); showScreen("screen-historial"); });
 document.getElementById("backFromHistTabla").addEventListener("click", ()=>{ renderHistorialDetalleBody(); showScreen("screen-historial-detalle"); });
-document.getElementById("backFromSync").addEventListener("click", ()=> showScreen("screen-home"));
+document.getElementById("backFromSync").addEventListener("click", ()=> showScreen(esRevisor() ? "screen-revision" : "screen-home"));
 
 /* ---------- PROVEEDORES: lista oficial que viene de Google Sheets (hoja "Proveedores") ---------- */
 function renderProveedorSelect(){
@@ -1373,7 +1662,7 @@ document.getElementById("histTablaBuscarCodigo").addEventListener("input", (e)=>
 
 /* ---------- SINCRONIZACIÓN: 100% AUTOMÁTICA, sin botones (estadísticas de MI usuario) ---------- */
 function renderSyncScreen(){
-  const rows = misRows();
+  const rows = esRevisor() ? loadRows() : misRows();
   const total = rows.length;
   const ingresado = rows.filter(r=>r.estado==="ingresado").length;
   const corregir = rows.filter(r=>r.estado==="corregir_lote").length;
@@ -1463,7 +1752,7 @@ async function pullTodos(){
   // hecho -- se veía como si la app "revirtiera" la edición sola.
   const idsEliminacionPendiente = new Set(cargarEliminacionesPendientes());
   const rowsActuales = loadRows();
-  const protegidas = rowsActuales.filter(r=> !r.sincronizado || r.edicionPendiente);
+  const protegidas = rowsActuales.filter(r=> !r.sincronizado || r.edicionPendiente || r.estadoPendiente);
   const idsProtegidos = new Set([...protegidas.map(r=>String(r.id)), ...idsEliminacionPendiente]);
 
   const desdeServidor = data.filas
@@ -1474,6 +1763,7 @@ async function pullTodos(){
       cantidad: s.cantidad, ubicacion: s.ubicacion, usuario: s.usuario,
       fechaKey: textoSeguro(s.fecha,"fecha"), hora: textoSeguro(s.hora,"hora"),
       estado: String(s.estado||"").indexOf("Ingresado por") === 0 ? "ingresado" : (s.estado === "Corregir lote" ? "corregir_lote" : "no_ingresado"),
+      estadoTexto: String(s.estado||""), udc: String(s.udc||""),
       sincronizado: true
     }));
 
@@ -1501,6 +1791,7 @@ async function syncAll(){
     await pushPendientes();
     await pushEdiciones();
     await pushEliminaciones();
+    await pushEstados();
     await pullTodos();
     await pullProveedores();
     lastSyncAt = todayKey() + " " + nowTimeStr();
@@ -1513,6 +1804,8 @@ async function syncAll(){
     if(document.getElementById("screen-tabla").classList.contains("active")){
       renderTablaProveedor();
     }
+    if(document.getElementById("screen-revision").classList.contains("active")) renderRevision(true);
+    if(document.getElementById("screen-avance").classList.contains("active")) renderAvance();
   }catch(err){ /* sin conexión: se reintenta en el próximo ciclo, sin molestar al usuario */ }
   finally{
     syncEnCurso = false;
