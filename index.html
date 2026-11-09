@@ -222,6 +222,7 @@
         <option>RCARREÑO</option>
         <option>RNORIEGA</option>
         <option>JGUILLEN</option>
+        <option>MMONTALVO</option>
       </select>
       <div class="pin-dots" id="pinDots">
         <span></span><span></span><span></span><span></span>
@@ -246,12 +247,11 @@
     <div class="field">
       <label>Proveedor</label>
       <select id="capProveedor"></select>
-      <input type="text" id="capProveedorManual" placeholder="Escribe el nombre del proveedor" style="display:none; margin-top:8px;">
     </div>
     <div class="field">
       <label>Código</label>
       <div class="input-con-repetir">
-        <input type="text" id="capCodigo" placeholder="Digitar código" inputmode="text" autocapitalize="characters">
+        <input type="text" id="capCodigo" placeholder="Digitar código" inputmode="text" autocapitalize="characters" maxlength="7">
         <span class="repetir-radio" title="Repetir el último valor de hoy"><input type="checkbox" id="chkRepetirCodigo"></span>
       </div>
       <div class="descripcion-preview" id="capDescripcionPreview"></div>
@@ -529,6 +529,7 @@ function abrirModalEdicion(id, campo, valorActual){
   const input = document.getElementById("modalEditarInput");
   input.value = valorActual;
   input.inputMode = (campo === "cantidad") ? "numeric" : "text";
+  if(campo === "codigo") input.maxLength = 7; else input.removeAttribute("maxlength"); // el código admite máximo 7 caracteres
   document.getElementById("modalEditarOverlay").classList.add("mostrar");
   setTimeout(()=> input.focus(), 50);
 }
@@ -758,7 +759,7 @@ document.getElementById("menuCambiarPin").addEventListener("click", async ()=>{
 /* ---------- GESTIÓN DE USUARIOS (solo JCAYCHO) ---------- */
 document.getElementById("menuAdminUsuarios").addEventListener("click", async ()=>{
   closeMenu();
-  const listaUsuarios = ["JCAYCHO","DCARRANZA","LILACHI","JFAJARDO","SFAJARDO","RCARREÑO","RNORIEGA","JGUILLEN"];
+  const listaUsuarios = ["JCAYCHO","DCARRANZA","LILACHI","JFAJARDO","SFAJARDO","RCARREÑO","RNORIEGA","JGUILLEN","MMONTALVO"];
   const elegido = prompt("¿A qué usuario le quieres cambiar la contraseña?\nEscribe el nombre exacto: " + listaUsuarios.join(", "));
   if(!elegido) return;
   const usuarioObjetivo = elegido.trim().toUpperCase();
@@ -811,15 +812,11 @@ function renderProveedorSelect(){
   const valorPrevio = sel.value; // se pierde al reconstruir el <select>, lo guardamos para restaurarlo
   const provs = loadProveedores();
   sel.innerHTML = "";
-  // Respaldo arriba de todo: por si el proveedor todavía no está en la lista oficial de Sheets
-  const optManual = document.createElement("option");
-  optManual.value = "__manual__"; optManual.textContent = "✍️ Ingresar proveedor";
-  sel.appendChild(optManual);
-  if(provs.length === 0){
-    const opt = document.createElement("option");
-    opt.value=""; opt.textContent="-- Sin proveedores cargados aún --";
-    sel.appendChild(opt);
-  }
+  // Primera opción vacía: obliga a elegir un proveedor de la lista oficial de Sheets
+  const optVacio = document.createElement("option");
+  optVacio.value = "";
+  optVacio.textContent = provs.length === 0 ? "-- Sin proveedores cargados aún --" : "-- Selecciona proveedor --";
+  sel.appendChild(optVacio);
   provs.forEach(p=>{
     const opt = document.createElement("option");
     opt.value = p; opt.textContent = p;
@@ -827,17 +824,10 @@ function renderProveedorSelect(){
   });
   // Si el proveedor que estaba elegido sigue existiendo, lo dejamos seleccionado
   // (así una sincronización en segundo plano no te borra lo que ya elegiste en el formulario)
-  if(valorPrevio && (provs.includes(valorPrevio) || valorPrevio === "__manual__")){
+  if(valorPrevio && provs.includes(valorPrevio)){
     sel.value = valorPrevio;
   }
-  document.getElementById("capProveedorManual").style.display = (sel.value === "__manual__") ? "" : "none";
 }
-document.getElementById("capProveedor").addEventListener("change", (e)=>{
-  document.getElementById("capProveedorManual").style.display = (e.target.value === "__manual__") ? "" : "none";
-});
-document.getElementById("capProveedorManual").addEventListener("input", (e)=>{
-  e.target.value = e.target.value.toUpperCase();
-});
 
 /* ---------- FORMATO Y VALIDACIÓN DE CAMPOS ---------- */
 // Lote: si tiene letras y números, las letras se muestran en mayúscula
@@ -961,7 +951,7 @@ function mostrarDescripcion(caja, descripcion){
 let timerDescripcion = null;
 document.getElementById("capCodigo").addEventListener("input", (e)=>{
   // Ahora se permiten letras además de números (hay códigos tipo "OB1625")
-  e.target.value = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g,"");
+  e.target.value = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g,"").slice(0,7); // máximo 7 caracteres
   marcarActividadReciente();
   const codigo = e.target.value.trim();
   const caja = document.getElementById("capDescripcionPreview");
@@ -1103,24 +1093,26 @@ function modoUbicacionActual(){
    producto varias veces seguidas (por ejemplo, mismo código a distintas ubicaciones). */
 function obtenerUltimoValorHoy(){
   const hoy = todayKey();
-  const filas = loadRows().filter(r=>r.fechaKey===hoy);
+  const yo = String(currentUser||"").trim().toUpperCase();
+  // Solo cuenta lo que ingresó ESTE usuario hoy (no lo de los demás usuarios)
+  const filas = loadRows().filter(r=> r.fechaKey===hoy && String(r.usuario||"").trim().toUpperCase()===yo);
   if(filas.length===0) return null;
   return filas.reduce((a,b)=> (a.id > b.id ? a : b));
 }
 function aplicarRepetirCodigo(){
   const u = obtenerUltimoValorHoy();
-  if(!u){ showToast("Aún no hay ningún registro de hoy para repetir"); document.getElementById("chkRepetirCodigo").checked=false; return; }
+  if(!u){ showToast("Aún no hay ningún registro tuyo de hoy para repetir"); document.getElementById("chkRepetirCodigo").checked=false; return; }
   document.getElementById("capCodigo").value = u.codigo || "";
   document.getElementById("capCodigo").dispatchEvent(new Event("input"));
 }
 function aplicarRepetirLote(){
   const u = obtenerUltimoValorHoy();
-  if(!u){ showToast("Aún no hay ningún registro de hoy para repetir"); document.getElementById("chkRepetirLote").checked=false; return; }
+  if(!u){ showToast("Aún no hay ningún registro tuyo de hoy para repetir"); document.getElementById("chkRepetirLote").checked=false; return; }
   document.getElementById("capLote").value = u.lote || "";
 }
 function aplicarRepetirVcto(){
   const u = obtenerUltimoValorHoy();
-  if(!u || !u.vcto){ showToast("Aún no hay ningún registro de hoy para repetir"); document.getElementById("chkRepetirVcto").checked=false; return; }
+  if(!u || !u.vcto){ showToast("Aún no hay ningún registro tuyo de hoy para repetir"); document.getElementById("chkRepetirVcto").checked=false; return; }
   const partes = String(u.vcto).split("-");
   if(partes.length===3){
     capDD.value = partes[0]; capMM.value = partes[1]; capAA.value = partes[2];
@@ -1129,7 +1121,7 @@ function aplicarRepetirVcto(){
 }
 function aplicarRepetirCantidad(){
   const u = obtenerUltimoValorHoy();
-  if(!u){ showToast("Aún no hay ningún registro de hoy para repetir"); document.getElementById("chkRepetirCantidad").checked=false; return; }
+  if(!u){ showToast("Aún no hay ningún registro tuyo de hoy para repetir"); document.getElementById("chkRepetirCantidad").checked=false; return; }
   document.getElementById("capCantidad").value = u.cantidad || "";
 }
 document.getElementById("chkRepetirCodigo").addEventListener("change", (e)=>{
@@ -1166,10 +1158,7 @@ function reaplicarChecksRepetir(){
 }
 
 document.getElementById("btnSaveRow").addEventListener("click", ()=>{
-  const selProveedor = document.getElementById("capProveedor").value;
-  const proveedor = selProveedor === "__manual__"
-    ? document.getElementById("capProveedorManual").value.trim().toUpperCase()
-    : selProveedor;
+  const proveedor = document.getElementById("capProveedor").value;
   const codigo = document.getElementById("capCodigo").value.trim();
   const lote = document.getElementById("capLote").value.trim();
   const dd = (capDD.value || "01").padStart(2,"0"); // si no se especificó el día, se asume el primer día del mes
@@ -1218,17 +1207,13 @@ document.getElementById("btnSaveRow").addEventListener("click", ()=>{
   });
   saveRows(rows);
 
-  ["capCodigo","capLote","capDD","capMM","capAA","capCantidad","capUbic1","capUbic2","capProveedorManual"].forEach(id=>{
+  ["capCodigo","capLote","capDD","capMM","capAA","capCantidad","capUbic1","capUbic2"].forEach(id=>{
     const el = document.getElementById(id);
     el.value="";
     el.classList.remove("campo-invalido");
   });
   document.getElementById("capDescripcionPreview").classList.remove("mostrar","no-encontrado");
   document.getElementById("capDescripcionPreview").textContent = "";
-  if(selProveedor === "__manual__"){
-    document.getElementById("capProveedor").selectedIndex = 0;
-  }
-  document.getElementById("capProveedorManual").style.display = "none";
   document.querySelector('input[name="modoUbic"][value="ubicacion"]').checked = true;
   document.getElementById("ubicacionCampos").style.display = "flex";
   showToast("Fila guardada");
