@@ -143,6 +143,24 @@
   .btn-copiar{background:transparent; border:none; color:var(--muted); padding:3px 4px; cursor:pointer; line-height:1; vertical-align:middle;}
   .btn-copiar svg{display:block;}
   .btn-copiar:active{opacity:.5;}
+  #revBody tr{cursor:pointer;}
+  .barra-sel{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px; color:var(--muted);}
+  .barra-sel .btn-card{padding:8px 12px;}
+  .barra-sel .btn-exp{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .prov-card.seleccionada{outline:2px solid var(--accent);}
+  .sel-card{display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; cursor:pointer; margin-right:auto; padding:6px 4px;}
+  .sel-card input{width:18px; height:18px; accent-color:var(--accent);}
+  .acciones-card{display:flex; gap:8px; justify-content:flex-end; margin-top:10px;}
+  .btn-card{display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border-radius:8px; border:1px solid var(--border); background:var(--card2); color:var(--text); font-size:12px; font-weight:600; cursor:pointer;}
+  .btn-card:active{opacity:.6;}
+  .btn-card-ok{color:var(--verde); border-color:var(--verde); padding:6px 11px; font-size:14px;}
+  .fecha-card{font-size:11px; color:var(--muted); font-weight:500; margin-left:6px;}
+  #avanceHint a{color:var(--accent);}
+  #revBody tr.marca-rojo td{background:rgba(239,68,68,.24);}
+  #revBody tr.marca-amarillo td{background:rgba(250,204,21,.22);}
+  .celda-desc{min-width:190px; max-width:260px; white-space:normal !important; font-size:12px; line-height:1.3;}
+  .lote-letras{color:#f87171; font-weight:700;}
+  .hint-rev{font-size:11.5px; color:var(--muted);}
   .estado-btn{border:none; cursor:pointer; font-family:inherit;}
   .estado-btn:active{opacity:.7;}
   .barra{height:7px; border-radius:6px; background:var(--card2); overflow:hidden; margin:8px 0 6px;}
@@ -414,9 +432,10 @@
       <input type="text" id="revBuscar" placeholder="Buscar por código..." inputmode="text" style="width:100%; padding:11px 12px 11px 36px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:14px; box-sizing:border-box;">
     </div>
     <div class="rev-resumen" id="revResumen"></div>
+    <div class="hint-rev" id="revHint"></div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Estado</th><th>Código</th><th>Ubicación</th><th>UDC</th><th>Lote</th><th>Cant.</th><th>Registró</th><th>Vcto</th></tr></thead>
+        <thead><tr><th>Proveedor</th><th>Código Proveedor</th><th>Código</th><th>Descripción</th><th>Lote</th><th>Fecha Vcto</th><th>Cantidad</th><th>Ubicación</th><th>UDC</th><th>Usuario</th><th>Estado</th><th>Fecha</th><th>Hora</th></tr></thead>
         <tbody id="revBody"></tbody>
       </table>
     </div>
@@ -435,6 +454,8 @@
       <button data-go="avance" class="activa">📊 Avance</button>
     </div>
     <div class="chips-rev" data-grupo="dia"><button data-v="hoy">Hoy</button><button data-v="todo">Todos los días</button></div>
+    <div class="hint-rev" id="avanceHint"></div>
+    <div class="barra-sel" id="avanceBarra" style="display:none;"></div>
     <div class="cards" id="avanceCards"></div>
   </div>
 
@@ -851,11 +872,12 @@ function irAPestanaRevision(cual){
 }
 // Ícono estándar de "copiar" (dos hojas superpuestas)
 const ICONO_COPIAR = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+const ICONO_EXPORTAR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
 // Celda con el valor y un ícono para copiarlo al portapapeles (solo el UDC en la vista de revisión)
-function celdaCopiable(valor){
+function celdaCopiable(valor, html){
   const v = String(valor == null ? "" : valor).trim();
   if(!v || v === "-") return '<span style="color:var(--muted);">—</span>';
-  return `<span>${escAttr(v)}</span> <button class="btn-copiar" data-copiar="${escAttr(v)}" aria-label="Copiar" title="Copiar">${ICONO_COPIAR}</button>`;
+  return `<span>${html || escAttr(v)}</span> <button class="btn-copiar" data-copiar="${escAttr(v)}" aria-label="Copiar" title="Copiar">${ICONO_COPIAR}</button>`;
 }
 function copiarTexto(texto){
   const ok = ()=> showToast("Copiado: " + texto);
@@ -871,6 +893,92 @@ function copiarTexto(texto){
   if(navigator.clipboard && window.isSecureContext){ navigator.clipboard.writeText(texto).then(ok, respaldo); }
   else respaldo();
 }
+
+/* ---- Lote con letras resaltadas (igual que en el Sheet: las letras en rojo y negrita) ---- */
+function colorearLote(lote){
+  const str = String(lote == null ? "" : lote);
+  return str.replace(/([A-Za-z]+)|([^A-Za-z]+)/g, (_m, letras, otros)=> letras ? '<span class="lote-letras">' + escAttr(letras) + '</span>' : escAttr(otros));
+}
+/* ---- Marcado de filas (un clic pinta la fila; cada usuario tiene su color y sus marcas, guardadas en su propio equipo) ---- */
+const COLOR_MARCA = { YUBICKSA: "rojo", EDWIN: "amarillo" };
+function claveMarcas(){ return "ubicaciones_marcas_v1_" + currentUser; }
+function cargarMarcas(){ try{ return JSON.parse(localStorage.getItem(claveMarcas()) || "{}"); }catch(_e){ return {}; } }
+function guardarMarcas(m){ try{ localStorage.setItem(claveMarcas(), JSON.stringify(m)); }catch(_e){} }
+function claseMarca(id){ return cargarMarcas()[String(id)] ? "marca-" + (COLOR_MARCA[currentUser] || "amarillo") : ""; }
+function alternarMarca(id){
+  const m = cargarMarcas(); const k = String(id);
+  if(m[k]) delete m[k]; else m[k] = 1;
+  guardarMarcas(m);
+}
+
+/* ---- Exportar a Excel (.xlsx) los proveedores terminados ----
+   Un proveedor está terminado en un día cuando TODOS sus registros de ese día están en "Ingresado".
+   El .xlsx se arma aquí mismo (sin librerías externas): hoja "Resumen" y hoja "Detalle". */
+function crc32(buf){
+  if(!crc32.t){ crc32.t = []; for(let n=0;n<256;n++){ let c = n; for(let k=0;k<8;k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); crc32.t[n] = c >>> 0; } }
+  let crc = -1; for(let i=0;i<buf.length;i++) crc = crc32.t[(crc ^ buf[i]) & 255] ^ (crc >>> 8);
+  return (crc ^ -1) >>> 0;
+}
+function zipSinCompresion(archivos){
+  const enc = new TextEncoder(), partes = [], central = []; let offset = 0;
+  const u16 = n=>[n & 255, (n >>> 8) & 255], u32 = n=>[n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255];
+  archivos.forEach(f=>{
+    const nombre = enc.encode(f.name), datos = enc.encode(f.data), crc = crc32(datos), tam = datos.length;
+    const local = new Uint8Array([0x50,0x4b,3,4, ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(tam), ...u32(tam), ...u16(nombre.length), ...u16(0)]);
+    partes.push(local, nombre, datos);
+    central.push(new Uint8Array([0x50,0x4b,1,2, ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(tam), ...u32(tam), ...u16(nombre.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), nombre);
+    offset += local.length + nombre.length + datos.length;
+  });
+  const tamCentral = central.reduce((a,b)=>a + b.length, 0);
+  const fin = new Uint8Array([0x50,0x4b,5,6, 0,0,0,0, ...u16(archivos.length), ...u16(archivos.length), ...u32(tamCentral), ...u32(offset), 0,0]);
+  return new Blob([...partes, ...central, fin], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+function xmlEsc(t){ return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function letraColumna(i){ let s = ""; i++; while(i > 0){ const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+function xmlHoja(filas, anchos){
+  const cols = '<cols>' + anchos.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join("") + '</cols>';
+  const datos = filas.map((fila, r)=> '<row r="' + (r+1) + '">' + fila.map((v, c)=>{
+    const ref = letraColumna(c) + (r+1), estilo = r === 0 ? ' s="1"' : "";
+    if(typeof v === "number") return `<c r="${ref}"${estilo}><v>${v}</v></c>`;
+    return `<c r="${ref}"${estilo} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+  }).join("") + '</row>').join("");
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' + cols + '<sheetData>' + datos + '</sheetData></worksheet>';
+}
+function exportarTarjetasExcel(terminados){
+  if(!terminados || terminados.length === 0) return;
+  const listaUnica = (rows, f)=> [...new Set(rows.map(f).filter(Boolean))].join(", ");
+  const resumen = [["Fecha","Proveedor","Registros","Registraron","Ingresaron","Primer registro","Último registro"]];
+  const detalle = [["Proveedor","Código Proveedor","Código","Descripción","Lote","Fecha Vcto","Cantidad","Ubicación","UDC","Usuario","Estado","Fecha","Hora"]];
+  terminados.forEach(rows=>{
+    const horas = rows.map(r=>String(r.hora||"")).filter(Boolean).sort();
+    resumen.push([rows[0].fechaKey, rows[0].proveedor, rows.length, listaUnica(rows, r=>r.usuario), listaUnica(rows, quienIngreso), horas[0]||"", horas[horas.length-1]||""]);
+    rows.slice().sort((a,b)=> Number(a.id) - Number(b.id)).forEach(r=>{
+      const cant = Number(r.cantidad);
+      detalle.push([r.proveedor, String(r.codigoProveedor||""), String(r.codigo||""), String(r.descripcion||""), String(r.lote||""), String(r.vcto||""),
+        (r.cantidad !== "" && r.cantidad != null && !isNaN(cant)) ? cant : String(r.cantidad||""), String(r.ubicacion||""), String(r.udc||""), String(r.usuario||""), String(r.estadoTexto || "Ingresado"), r.fechaKey, String(r.hora||"")]);
+    });
+  });
+  const NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"', REL = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  const archivos = [
+    { name: "[Content_Types].xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
+    { name: "_rels/.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: "xl/workbook.xml", data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook ${NS} ${REL}><sheets><sheet name="Resumen" sheetId="1" r:id="rId1"/><sheet name="Detalle" sheetId="2" r:id="rId2"/></sheets></workbook>` },
+    { name: "xl/_rels/workbook.xml.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+    { name: "xl/styles.xml", data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet ${NS}><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>` },
+    { name: "xl/worksheets/sheet1.xml", data: xmlHoja(resumen, [12,24,11,30,24,15,15]) },
+    { name: "xl/worksheets/sheet2.xml", data: xmlHoja(detalle, [24,16,12,40,14,12,10,13,14,14,22,12,9]) }
+  ];
+  const blob = zipSinCompresion(archivos);
+  const fechasUnicas = [...new Set(terminados.map(g=>g[0].fechaKey))];
+  const nombre = terminados.length === 1
+    ? (String(terminados[0][0].proveedor).replace(/[^A-Za-z0-9&]+/g, "_").replace(/^_+|_+$/g, "") || "proveedor") + "_" + terminados[0][0].fechaKey + ".xlsx"
+    : "proveedores_terminados_" + (fechasUnicas.length === 1 ? fechasUnicas[0] : "varios_dias") + ".xlsx";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  showToast("Excel generado: " + terminados.length + " proveedor(es)");
+}
+
 function renderRevision(desdeSync){
   const base = revFilasDelDia();
   // opciones del selector de proveedor: solo se reconstruye si cambió la lista (para no cerrar el desplegable mientras se usa)
@@ -899,32 +1007,68 @@ function renderRevision(desdeSync){
     const est = estadoInfo(r.estado);
     const quien = quienIngreso(r);
     const texto = r.estado === "ingresado" && quien ? "Ingresado · " + escAttr(quien) : est.texto;
-    return `<tr>
+    return `<tr data-fila-id="${escAttr(r.id)}" class="${claseMarca(r.id)}">
+      <td>${escAttr(r.proveedor)}</td><td>${celdaCopiable(r.codigoProveedor)}</td>
+      <td>${escAttr(r.codigo)}</td><td class="celda-desc">${escAttr(r.descripcion)}</td>
+      <td>${celdaCopiable(r.lote, colorearLote(r.lote))}</td><td>${escAttr(r.vcto)}</td><td>${escAttr(r.cantidad)}</td>
+      <td>${escAttr(r.ubicacion)}</td><td>${celdaCopiable(r.udc)}</td><td>${escAttr(r.usuario)}</td>
       <td><button class="estado-pill estado-btn ${est.clase}" data-rev-id="${escAttr(r.id)}">${texto}</button></td>
-      <td>${escAttr(r.codigo)}</td>
-      <td>${escAttr(r.ubicacion)}</td><td>${celdaCopiable(r.udc)}</td>
-      <td>${escAttr(r.lote)}</td><td>${escAttr(r.cantidad)}</td><td>${escAttr(r.usuario)}</td><td>${escAttr(r.vcto)}</td>
+      <td>${escAttr(r.fechaKey)}</td><td>${escAttr(r.hora)}</td>
     </tr>`;
   }).join("");
+  document.getElementById("revHint").textContent = "Toca una fila para marcarla (tu color: " + (COLOR_MARCA[currentUser] === "rojo" ? "rojo" : "amarillo") + "). Vuelve a tocarla para quitar la marca.";
   document.getElementById("revEmpty").style.display = rows.length ? "none" : "block";
   marcarChips();
 }
+/* Tarjetas ocultas por el usuario (solo se ocultan mientras estén terminadas; los datos del Sheet no se tocan) */
+function claveOcultas(){ return "ubicaciones_tarjetas_ocultas_v1_" + currentUser; }
+function cargarOcultas(){ try{ return JSON.parse(localStorage.getItem(claveOcultas()) || "[]"); }catch(_e){ return []; } }
+function guardarOcultas(l){ try{ localStorage.setItem(claveOcultas(), JSON.stringify(l)); }catch(_e){} }
+function claveTarjeta(g){ return g.fecha + "|" + g.prov + "|" + g.total; } // si cambia la cantidad de filas, la tarjeta vuelve a aparecer
+let avanceVerOcultas = false;
+const avanceSel = new Set(); // tarjetas terminadas marcadas para exportar juntas
 function renderAvance(){
   const base = revFilasDelDia();
   const grupos = new Map();
-  base.forEach(r=>{ if(!grupos.has(r.proveedor)) grupos.set(r.proveedor, []); grupos.get(r.proveedor).push(r); });
+  base.forEach(r=>{ const k = r.fechaKey + "|" + r.proveedor; if(!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(r); });
   const cont = document.getElementById("avanceCards");
-  if(grupos.size === 0){
-    cont.innerHTML = '<div class="empty-msg">' + (revDia === "hoy" ? "Todavía no hay registros hoy." : "No hay registros.") + '</div>';
-    marcarChips(); return;
-  }
-  const lista = [...grupos.entries()].map(([prov, rows])=>{
+  const ocultas = cargarOcultas();
+  let nOcultas = 0;
+  const lista = [...grupos.values()].map(rows=>{
     const total = rows.length;
     const ing = rows.filter(r=>r.estado==="ingresado").length;
     const cor = rows.filter(r=>r.estado==="corregir_lote").length;
     const pen = total - ing - cor;
-    return {prov, rows, total, ing, cor, pen};
-  }).sort((a,b)=> (b.pen>0) - (a.pen>0) || b.pen - a.pen || a.prov.localeCompare(b.prov));
+    return {fecha: rows[0].fechaKey, prov: rows[0].proveedor, rows, total, ing, cor, pen, terminada: pen === 0 && cor === 0};
+  }).filter(g=>{
+    const oculta = g.terminada && ocultas.includes(claveTarjeta(g));
+    if(oculta) nOcultas++;
+    return avanceVerOcultas ? oculta : !oculta;
+  }).sort((a,b)=> (b.pen>0) - (a.pen>0) || b.pen - a.pen || parseFechaKey(b.fecha) - parseFechaKey(a.fecha) || a.prov.localeCompare(b.prov));
+  // la selección solo conserva tarjetas terminadas que siguen visibles
+  const clavesTerminadasVisibles = new Set(lista.filter(g=>g.terminada && !avanceVerOcultas).map(claveTarjeta));
+  [...avanceSel].forEach(k=>{ if(!clavesTerminadasVisibles.has(k)) avanceSel.delete(k); });
+  const barra = document.getElementById("avanceBarra");
+  if(clavesTerminadasVisibles.size > 0){
+    barra.style.display = "flex";
+    barra.innerHTML = (avanceSel.size
+      ? '<span>' + avanceSel.size + ' seleccionada(s)</span><button class="btn-card btn-exp" id="btnExportarSel">' + ICONO_EXPORTAR + '<span>Exportar (' + avanceSel.size + ')</span></button><button class="btn-card" id="btnLimpiarSel">Limpiar</button>'
+      : '<span>Marca las tarjetas terminadas que quieras exportar juntas</span>')
+      + (avanceSel.size < clavesTerminadasVisibles.size ? '<button class="btn-card" id="btnSelTodas">Seleccionar todas las terminadas (' + clavesTerminadasVisibles.size + ')</button>' : "");
+    const be = document.getElementById("btnExportarSel"); if(be) be.onclick = ()=>{ exportarTarjetasExcel(lista.filter(g=>avanceSel.has(claveTarjeta(g))).map(g=>g.rows)); avanceSel.clear(); renderAvance(); };
+    const bl = document.getElementById("btnLimpiarSel"); if(bl) bl.onclick = ()=>{ avanceSel.clear(); renderAvance(); };
+    const bt = document.getElementById("btnSelTodas"); if(bt) bt.onclick = ()=>{ clavesTerminadasVisibles.forEach(k=>avanceSel.add(k)); renderAvance(); };
+  } else { barra.style.display = "none"; barra.innerHTML = ""; }
+  const hint = document.getElementById("avanceHint");
+  hint.innerHTML = avanceVerOcultas
+    ? 'Mostrando tarjetas ocultas. <a href="#" id="lnkOcultas">Volver a las tarjetas</a>'
+    : (nOcultas ? nOcultas + ' tarjeta(s) oculta(s). <a href="#" id="lnkOcultas">Ver ocultas</a>' : "");
+  const lnk = document.getElementById("lnkOcultas");
+  if(lnk) lnk.addEventListener("click", (ev)=>{ ev.preventDefault(); avanceVerOcultas = !avanceVerOcultas; renderAvance(); });
+  if(lista.length === 0){
+    cont.innerHTML = '<div class="empty-msg">' + (avanceVerOcultas ? "No hay tarjetas ocultas." : (revDia === "hoy" ? "Todavía no hay registros hoy." : "No hay registros.")) + '</div>';
+    marcarChips(); return;
+  }
   cont.innerHTML = "";
   lista.forEach(g=>{
     const cuenta = (arr, f)=>{ const m = new Map(); arr.forEach(r=>{ const k=f(r); if(k) m.set(k,(m.get(k)||0)+1); }); return [...m.entries()].sort((a,b)=>b[1]-a[1]); };
@@ -933,15 +1077,36 @@ function renderAvance(){
     const ultima = g.rows.slice().sort((a,b)=>Number(b.id)-Number(a.id))[0];
     const pct = g.total ? Math.round(g.ing*100/g.total) : 0;
     const card = document.createElement("div");
-    card.className = "prov-card" + (g.pen===0 && g.cor===0 ? " completo" : "");
+    const seleccionada = avanceSel.has(claveTarjeta(g));
+    card.className = "prov-card" + (g.terminada ? " completo" : "") + (seleccionada ? " seleccionada" : "");
+    const acciones = g.terminada ? `
+      <div class="acciones-card">
+        ${avanceVerOcultas ? "" : `<label class="sel-card"><input type="checkbox" data-sel="1" ${seleccionada ? "checked" : ""}> Seleccionar</label>`}
+        <button class="btn-card btn-card-ok" data-ocultar="1" title="${avanceVerOcultas ? "Volver a mostrar" : "Quitar tarjeta"}">${avanceVerOcultas ? "↩" : "✓"}</button>
+      </div>` : "";
     card.innerHTML = `
-      <div class="name">${escAttr(g.prov)}${g.pen===0 && g.cor===0 ? " ✅" : ""}</div>
+      <div class="name">${escAttr(g.prov)}${g.terminada ? " ✅" : ""}${revDia === "todo" ? ' <span class="fecha-card">' + escAttr(g.fecha) + '</span>' : ""}</div>
       <div class="meta"><span>${g.ing} de ${g.total} ingresados</span><span>${g.pen} pendientes${g.cor ? " · " + g.cor + " a corregir" : ""}</span></div>
       <div class="barra"><span style="width:${pct}%"></span></div>
       <div class="quien">Registran: ${regPor || "—"}</div>
       ${ingPor ? `<div class="quien">Ingresaron: ${ingPor}</div>` : ""}
-      <div class="quien">Último registro: ${escAttr(ultima.hora||"")} por <b>${escAttr(ultima.usuario)}</b></div>`;
-    card.addEventListener("click", ()=>{ revProv = g.prov; revEstado = "pendientes"; revBuscar = ""; document.getElementById("revBuscar").value = ""; irAPestanaRevision("revision"); });
+      <div class="quien">Último registro: ${escAttr(ultima.hora||"")} por <b>${escAttr(ultima.usuario)}</b></div>${acciones}`;
+    card.addEventListener("click", (ev)=>{
+      if(ev.target.closest(".sel-card")){
+        ev.stopPropagation();
+        if(ev.target.matches("input")){ const k = claveTarjeta(g); if(ev.target.checked) avanceSel.add(k); else avanceSel.delete(k); renderAvance(); }
+        return;
+      }
+      if(ev.target.closest("[data-ocultar]")){
+        ev.stopPropagation();
+        const k = claveTarjeta(g); let l = cargarOcultas();
+        l = avanceVerOcultas ? l.filter(x=>x!==k) : (l.includes(k) ? l : l.concat([k]));
+        guardarOcultas(l); renderAvance(); return;
+      }
+      revProv = g.prov; revEstado = "pendientes"; revBuscar = ""; document.getElementById("revBuscar").value = "";
+      if(g.fecha !== todayKey()) revDia = "todo";
+      revOpcionesFirma = ""; marcarChips(); irAPestanaRevision("revision");
+    });
     cont.appendChild(card);
   });
   marcarChips();
@@ -960,7 +1125,9 @@ document.addEventListener("click", (e)=>{
   const cop = e.target.closest("[data-copiar]");
   if(cop){ copiarTexto(cop.dataset.copiar); return; }
   const pill = e.target.closest("[data-rev-id]");
-  if(pill){ abrirModalEstado(pill.dataset.revId); }
+  if(pill){ abrirModalEstado(pill.dataset.revId); return; }
+  const fila = e.target.closest("#revBody tr[data-fila-id]");
+  if(fila){ alternarMarca(fila.dataset.filaId); renderRevision(true); }
 });
 document.getElementById("revProveedor").addEventListener("change", (e)=>{ revProv = e.target.value; renderRevision(); });
 document.getElementById("revBuscar").addEventListener("input", (e)=>{ revBuscar = e.target.value.trim(); renderRevision(); });
@@ -1763,7 +1930,7 @@ async function pullTodos(){
       cantidad: s.cantidad, ubicacion: s.ubicacion, usuario: s.usuario,
       fechaKey: textoSeguro(s.fecha,"fecha"), hora: textoSeguro(s.hora,"hora"),
       estado: String(s.estado||"").indexOf("Ingresado por") === 0 ? "ingresado" : (s.estado === "Corregir lote" ? "corregir_lote" : "no_ingresado"),
-      estadoTexto: String(s.estado||""), udc: String(s.udc||""),
+      estadoTexto: String(s.estado||""), udc: String(s.udc||""), codigoProveedor: String(s.codigoProveedor||""), descripcion: String(s.descripcion||""),
       sincronizado: true
     }));
 
