@@ -77,6 +77,11 @@
     color:var(--text);
   }
   .descripcion-preview.mostrar{display:block;}
+  .logistica-box{margin-top:6px; padding:9px 11px; border-radius:10px; background:var(--card2); border:1px solid var(--border); font-size:12.5px; line-height:1.55;}
+  .logistica-box .lg-fila{display:flex; flex-wrap:wrap; gap:4px 14px; color:var(--muted);}
+  .logistica-box .lg-fila b{color:var(--text); font-weight:700;}
+  .logistica-box .lg-ok{margin-top:5px; color:var(--verde); font-weight:600;}
+  .logistica-box .lg-alerta{margin-top:5px; color:#f87171; font-weight:700;}
   .descripcion-preview.no-encontrado{
     color:var(--rojo);
   }
@@ -296,6 +301,7 @@
         <span class="repetir-radio" title="Repetir el último valor de hoy"><input type="checkbox" id="chkRepetirCodigo"></span>
       </div>
       <div class="descripcion-preview" id="capDescripcionPreview"></div>
+      <div class="logistica-box" id="capLogistica" style="display:none;"></div>
     </div>
     <div class="field">
       <label>Lote</label>
@@ -529,6 +535,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="logistica.js"></script>
 <script>
 /* ======= CONFIGURACIÓN: pega aquí la URL de tu Web App de Google Apps Script ======= */
 const SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzPwQbXOcjy9AUGoZezAFvKxTtZ7qO9N9i5l1LvZXbhdvHwDh3YngM-ia-XvqQw0l0pcQ/exec";
@@ -1179,6 +1186,52 @@ async function pushEstados(){
     saveRows(loadRows().map(r=> (enviados.has(String(r.id)) && enviados.get(String(r.id)) === r.estadoTexto) ? {...r, estadoPendiente:false} : r));
   }
 }
+
+
+/* ---------- DATA LOGÍSTICA al digitar un código (solo usuarios de captura; no aplica a YUBICKSA / EDWIN) ----------
+   Los datos vienen de logistica.js (Maestro de Artículos). Es solo informativo: nunca impide guardar ni cambia lo que se guarda.
+   Capacidad de un pallet en unidades = bultos por cama × camas por pallet × unidades por caja. */
+function datosLogisticos(codigo){
+  const base = (window.LOGISTICA && window.LOGISTICA.d) || null;
+  const e = base && base[codigo];
+  return e ? { bultosCama: e[0], camasPallet: e[1], bultosPallet: e[2], undCaja: e[3] } : null;
+}
+function capacidadPallet(d){
+  const bultos = (d.bultosCama && d.camasPallet) ? d.bultosCama * d.camasPallet : d.bultosPallet;
+  return (bultos && d.undCaja) ? { bultos: bultos, unidades: bultos * d.undCaja } : null;
+}
+let logisticaFirma = null;
+function refrescarLogistica(){
+  const caja = document.getElementById("capLogistica");
+  if(!caja) return;
+  const codigo = document.getElementById("capCodigo").value.trim();
+  const cantTxt = document.getElementById("capCantidad").value;
+  const firma = codigo + "|" + cantTxt;
+  if(firma === logisticaFirma) return;
+  logisticaFirma = firma;
+  const d = (!esRevisor() && codigo) ? datosLogisticos(codigo) : null;
+  if(!d){ caja.style.display = "none"; caja.innerHTML = ""; return; }
+  const cap = capacidadPallet(d);
+  const bultosPallet = cap ? cap.bultos : d.bultosPallet;
+  const trozos = [];
+  if(d.bultosCama) trozos.push('Bultos x cama: <b>' + d.bultosCama + '</b>');
+  if(d.camasPallet) trozos.push('Camas x pallet: <b>' + d.camasPallet + '</b>');
+  if(bultosPallet) trozos.push('Bultos x pallet: <b>' + bultosPallet + '</b>');
+  if(d.undCaja) trozos.push('Und x caja: <b>' + d.undCaja + '</b>');
+  if(cap) trozos.push('Pallet completo: <b>' + cap.unidades + ' und</b>');
+  if(trozos.length === 0){ caja.style.display = "none"; caja.innerHTML = ""; return; }
+  let html = '<div class="lg-fila">' + trozos.map(t=>'<span>' + t + '</span>').join("") + '</div>';
+  const cantidad = Number(cantTxt);
+  if(cap && cantTxt !== "" && cantidad > 0){
+    html += cantidad > cap.unidades
+      ? '<div class="lg-alerta">⚠️ ' + cantidad + ' und supera un pallet completo (' + cap.unidades + ' und)</div>'
+      : '<div class="lg-ok">✓ ' + cantidad + ' und entra en un pallet (' + cap.unidades + ' und)</div>';
+  }
+  caja.innerHTML = html; caja.style.display = "block";
+}
+["capCodigo","capCantidad"].forEach(id=> document.getElementById(id).addEventListener("input", refrescarLogistica));
+// El código y la cantidad también cambian por programa (repetir, guardar y limpiar): se revisa de forma liviana cada instante
+setInterval(()=>{ if(document.getElementById("screen-home").classList.contains("active")) refrescarLogistica(); }, 300);
 
 /* ---------- CAMBIO DE CONTRASEÑA (propia, una sola vez) ---------- */
 document.getElementById("menuCambiarPin").addEventListener("click", async ()=>{
