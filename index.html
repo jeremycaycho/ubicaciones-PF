@@ -107,6 +107,23 @@
   .ubic-fila .split-row input.w-sm{width:52px; height:32px; padding:0 4px; border-radius:8px;}
   .pos-radios{display:flex; flex-wrap:wrap; align-items:center; gap:0 8px; height:32px;}
   .pos-radios .radio-opt{display:flex; align-items:center; margin:0; font-size:13px; font-weight:600; gap:3px; height:32px; line-height:1;}
+  /* Pantalla Datos logísticos */
+  .log-buscar{width:100%; padding:11px 12px 11px 36px; border-radius:10px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:16px; box-sizing:border-box;}
+  .log-buscar:focus{outline:none; border-color:var(--accent);}
+  .log-resultado{display:flex; flex-direction:column; gap:8px;}
+  .log-hint{font-size:12.5px; color:var(--muted); padding:2px 4px;}
+  .log-card{background:var(--card2); border:1px solid var(--border); border-radius:12px; padding:11px 13px;}
+  .log-cod{font-size:20px; font-weight:700; letter-spacing:.5px;}
+  .log-desc{font-size:13.5px; color:var(--text); margin-top:2px; line-height:1.3;}
+  .log-grid{margin-top:8px; display:grid; grid-template-columns:1fr auto; gap:5px 12px; font-size:14px;}
+  .log-grid .k{color:var(--muted);}
+  .log-grid .v{font-weight:700; text-align:right; word-break:break-all;}
+  .log-grid .v.vacio{color:var(--muted); font-weight:500;}
+  .log-sep{grid-column:1 / -1; border-top:1px solid var(--border); margin:3px 0;}
+  .log-total{color:var(--verde);}
+  .log-sug{display:flex; flex-wrap:wrap; gap:6px;}
+  .log-sug button{padding:7px 11px; border-radius:20px; border:1px solid var(--border); background:var(--card2); color:var(--text); font-size:13px; font-weight:600; cursor:pointer;}
+  .log-sug button:active{opacity:.6;}
   .btn-texto{background:none; border:none; padding:4px 0; color:var(--muted); font-size:11.5px; text-decoration:underline; cursor:pointer; width:auto;}
   .btn-texto:active{opacity:.6;}
   #ubicPosicionesAbajo{margin:0 0 4px 2px;}
@@ -368,6 +385,20 @@
   </div>
 
   <!-- PROVEEDORES (tarjetas) -->
+  <!-- DATOS LOGÍSTICOS: buscador de código (todos los usuarios) -->
+  <div class="screen" id="screen-logistica">
+    <div class="topbar">
+      <span class="back" id="backFromLogistica">←</span>
+      <h1>Datos logísticos</h1>
+      <span style="width:20px;"></span>
+    </div>
+    <div class="buscar-wrap">
+      <span class="buscar-icono">🔍</span>
+      <input type="text" id="logBuscar" class="log-buscar" placeholder="Buscar código" autocomplete="off" autocapitalize="characters" maxlength="14">
+    </div>
+    <div id="logResultado" class="log-resultado"></div>
+  </div>
+
   <div class="screen" id="screen-proveedores">
     <div class="topbar">
       <span class="back" id="backFromProveedores">←</span>
@@ -515,6 +546,7 @@
     <button class="menu-item" id="menuAvance" style="display:none;"><span class="ico">📊</span> Avance por proveedor</button>
     <button class="menu-item" id="menuProveedores"><span class="ico">📋</span> Proveedores</button>
     <button class="menu-item" id="menuHistorial"><span class="ico">🕒</span> Historial diario</button>
+    <button class="menu-item" id="menuLogistica"><span class="ico">📦</span> Datos logísticos</button>
     <button class="menu-item" id="menuSync"><span class="ico">☁️</span> Sincronización</button>
     <button class="menu-item" id="menuCambiarPin" style="display:none;"><span class="ico">🔑</span> Cambiar mi contraseña</button>
     <button class="menu-item" id="menuAdminUsuarios" style="display:none;"><span class="ico">👤</span> Gestionar usuarios</button>
@@ -558,6 +590,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="logistica.js"></script>
+<script src="maestro.js"></script>
 <script>
 /* ======= CONFIGURACIÓN: pega aquí la URL de tu Web App de Google Apps Script ======= */
 const SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzPwQbXOcjy9AUGoZezAFvKxTtZ7qO9N9i5l1LvZXbhdvHwDh3YngM-ia-XvqQw0l0pcQ/exec";
@@ -1327,6 +1360,134 @@ document.getElementById("menuHistorial").addEventListener("click", ()=>{
 document.getElementById("menuSync").addEventListener("click", ()=>{
   closeMenu(); renderSyncScreen(); showScreen("screen-sync");
 });
+/* ---------- DATOS LOGÍSTICOS (pantalla de consulta, disponible para todos los usuarios) ----------
+   Usa logistica.js (bultos, camas, unidades) y maestro.js (EAN13 y DUN14), ambos sacados del Maestro de Artículos.
+   Es solo consulta: no guarda nada ni toca los registros. Si algún archivo no llegó a cargar, muestra lo que haya. */
+let logTodosCodigos = null, logPorBarras = null, logToken = 0;
+function datosMaestroCodigo(c){
+  const m = window.MAESTRO && window.MAESTRO.d && window.MAESTRO.d[c];
+  return m ? { ean: m[0] || "", dun: m[1] || "" } : { ean: "", dun: "" };
+}
+function logExisteCodigo(c){
+  return !!((window.LOGISTICA && window.LOGISTICA.d && window.LOGISTICA.d[c]) || (window.MAESTRO && window.MAESTRO.d && window.MAESTRO.d[c]));
+}
+function logConstruirIndices(){
+  if(logTodosCodigos) return;
+  const set = new Set();
+  [window.LOGISTICA, window.MAESTRO].forEach(o=>{ if(o && o.d) Object.keys(o.d).forEach(k=> set.add(k)); });
+  logTodosCodigos = Array.from(set).sort();
+  logPorBarras = {};
+  if(window.MAESTRO && window.MAESTRO.d){
+    Object.keys(window.MAESTRO.d).forEach(c=>{
+      const m = window.MAESTRO.d[c];
+      if(m[0]) logPorBarras[m[0]] = c;
+      if(m[1]) logPorBarras[m[1]] = c;
+    });
+    // También se encuentra sin los ceros del inicio (hay lectores que los omiten); solo si no hay otro código igual
+    Object.keys(window.MAESTRO.d).forEach(c=>{
+      window.MAESTRO.d[c].forEach(v=>{
+        if(!v) return;
+        const sin = v.replace(/^0+/, "");
+        if(sin && sin !== v && logPorBarras[sin] === undefined) logPorBarras[sin] = c;
+      });
+    });
+  }
+}
+function logFila(k, v, copiable){
+  const t = String(v == null ? "" : v).trim();
+  if(!t) return '<div class="k">' + k + '</div><div class="v vacio">—</div>';
+  return '<div class="k">' + k + '</div><div class="v">' + (copiable ? celdaCopiable(t) : escAttr(t)) + '</div>';
+}
+function logTarjetaHtml(codigo, nota){
+  const d = datosLogisticos(codigo);
+  const cap = d ? capacidadPallet(d) : null;
+  const mx = datosMaestroCodigo(codigo);
+  const num = x => (x ? String(x) : "");
+  let h = '<div class="log-card">';
+  h += '<div class="log-cod">' + escAttr(codigo) + '</div>';
+  h += '<div class="log-desc" id="logDesc"></div>';
+  if(nota) h += '<div class="log-hint" style="padding:4px 0 0;">' + nota + '</div>';
+  h += '<div class="log-grid">';
+  h += logFila("Bultos x cama", d ? num(d.bultosCama) : "");
+  h += logFila("Camas x pallet", d ? num(d.camasPallet) : "");
+  h += logFila("Bultos x pallet", cap ? num(cap.bultos) : (d ? num(d.bultosPallet) : ""));
+  h += logFila("Und x caja", d ? num(d.undCaja) : "");
+  h += '<div class="log-sep"></div>';
+  h += cap ? ('<div class="k log-total">Pallet completo</div><div class="v log-total">' + cap.unidades + ' und</div>') : logFila("Pallet completo", "");
+  h += '<div class="log-sep"></div>';
+  h += logFila("EAN13", mx.ean, true);
+  h += logFila("DUN14", mx.dun, true);
+  h += '</div>';
+  if(!d && !mx.ean && !mx.dun) h += '<div class="log-hint" style="padding:8px 0 0;">Este código no tiene datos logísticos en el Maestro.</div>';
+  h += '</div>';
+  return h;
+}
+function logPonerDescripcion(codigo, token){
+  const poner = txt=>{
+    if(token !== logToken) return;
+    const el = document.getElementById("logDesc");
+    if(el) el.textContent = (txt && txt !== "No encontrado") ? txt : "";
+  };
+  const cache = obtenerCacheDescMem();
+  if(cache.datos[codigo] !== undefined){ poner(cache.datos[codigo]); return; }
+  buscarEnIDB(codigo).then(async d=>{
+    if(d !== undefined){ poner(d || ""); return; }
+    // Todavía no está en el catálogo local: se consulta a Sheets (igual que en la captura)
+    if(SHEET_WEB_APP_URL.startsWith("PEGA_AQUI")) return;
+    try{
+      const resp = await fetch(SHEET_WEB_APP_URL + "?action=descripcion&codigo=" + encodeURIComponent(codigo));
+      const data = await resp.json();
+      poner((data.ok && data.descripcion) ? data.descripcion : "");
+    }catch(err){ /* sin conexión: no se muestra la descripción */ }
+  });
+}
+function renderLogistica(){
+  const entrada = document.getElementById("logBuscar");
+  const q = entrada.value;
+  const cont = document.getElementById("logResultado");
+  const token = ++logToken;
+  if(!q){ cont.innerHTML = '<div class="log-hint">Escribe un código, o escanea el EAN13 / DUN14 del producto.</div>'; return; }
+  logConstruirIndices();
+  let codigo = null, nota = "";
+  if(q.length <= 7 && logExisteCodigo(q)) codigo = q;
+  else if(logPorBarras[q]){ codigo = logPorBarras[q]; nota = "Encontrado por código de barras " + escAttr(q); }
+  if(codigo){
+    cont.innerHTML = logTarjetaHtml(codigo, nota);
+    logPonerDescripcion(codigo, token);
+    return;
+  }
+  if(q.length >= 2 && q.length <= 7){
+    const sug = [];
+    for(let i = 0; i < logTodosCodigos.length && sug.length < 8; i++){
+      if(logTodosCodigos[i].indexOf(q) === 0) sug.push(logTodosCodigos[i]);
+    }
+    if(sug.length){
+      cont.innerHTML = '<div class="log-hint">Códigos que empiezan con «' + escAttr(q) + '»:</div><div class="log-sug">' +
+        sug.map(c=> '<button type="button" data-log-cod="' + escAttr(c) + '">' + escAttr(c) + '</button>').join("") + '</div>';
+      return;
+    }
+  }
+  cont.innerHTML = '<div class="log-hint">No se encontró «' + escAttr(q) + '» en el Maestro.</div>';
+}
+document.getElementById("logBuscar").addEventListener("input", (e)=>{
+  e.target.value = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g,"").slice(0,14);
+  renderLogistica();
+});
+document.getElementById("logResultado").addEventListener("click", (e)=>{
+  const b = e.target.closest("[data-log-cod]");
+  if(b){ document.getElementById("logBuscar").value = b.dataset.logCod; renderLogistica(); }
+});
+document.getElementById("menuLogistica").addEventListener("click", ()=>{
+  closeMenu();
+  document.getElementById("logBuscar").value = "";
+  renderLogistica();
+  showScreen("screen-logistica");
+  setTimeout(()=> document.getElementById("logBuscar").focus(), 50);
+});
+document.getElementById("backFromLogistica").addEventListener("click", ()=>{
+  if(esRevisor()){ renderRevision(); showScreen("screen-revision"); } else showScreen("screen-home");
+});
+
 document.getElementById("menuLogout").addEventListener("click", logout);
 
 /* ---------- BOTONES DE RETROCESO ---------- */
