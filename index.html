@@ -124,6 +124,14 @@
   .log-sug{display:flex; flex-wrap:wrap; gap:6px;}
   .log-sug button{padding:7px 11px; border-radius:20px; border:1px solid var(--border); background:var(--card2); color:var(--text); font-size:13px; font-weight:600; cursor:pointer;}
   .log-sug button:active{opacity:.6;}
+  .btn-escanear{position:absolute; right:6px; top:50%; transform:translateY(-50%); background:transparent; border:none; font-size:20px; padding:6px 8px; cursor:pointer; line-height:1;}
+  .btn-escanear:active{opacity:.5;}
+  .log-buscar{padding-right:46px !important;}
+  .escaner-overlay{position:fixed; inset:0; z-index:2000; background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center;}
+  .escaner-overlay video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;}
+  .escaner-guia{position:relative; width:78%; max-width:340px; height:130px; border:2px solid #22c55e; border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,.45);}
+  .escaner-texto{position:relative; margin-top:14px; color:#fff; font-size:13.5px; text-align:center; padding:0 20px; text-shadow:0 1px 3px #000;}
+  .btn-escaner-cerrar{position:absolute; bottom:28px; left:50%; transform:translateX(-50%); width:auto; padding:12px 34px;}
   .btn-texto{background:none; border:none; padding:4px 0; color:var(--muted); font-size:11.5px; text-decoration:underline; cursor:pointer; width:auto;}
   .btn-texto:active{opacity:.6;}
   #ubicPosicionesAbajo{margin:0 0 4px 2px;}
@@ -395,6 +403,7 @@
     <div class="buscar-wrap">
       <span class="buscar-icono">🔍</span>
       <input type="text" id="logBuscar" class="log-buscar" placeholder="Buscar código" autocomplete="off" autocapitalize="characters" maxlength="14">
+      <button type="button" id="btnEscanear" class="btn-escanear" aria-label="Escanear con la cámara" title="Escanear con la cámara" style="display:none;">📷</button>
     </div>
     <div id="logResultado" class="log-resultado"></div>
   </div>
@@ -406,6 +415,14 @@
       <span style="width:20px;"></span>
     </div>
     <div class="cards" id="provCards"></div>
+  </div>
+
+  <!-- ESCÁNER CON CÁMARA (celulares; la CK65 usa su lector físico) -->
+  <div id="escanerOverlay" class="escaner-overlay" style="display:none;">
+    <video id="escanerVideo" playsinline muted></video>
+    <div class="escaner-guia"></div>
+    <div class="escaner-texto">Apunta al código de barras (EAN13 o DUN14)</div>
+    <button type="button" id="btnCerrarEscaner" class="btn btn-escaner-cerrar">Cancelar</button>
   </div>
 
   <!-- TABLA DE UN PROVEEDOR -->
@@ -1477,6 +1494,57 @@ document.getElementById("logResultado").addEventListener("click", (e)=>{
   const b = e.target.closest("[data-log-cod]");
   if(b){ document.getElementById("logBuscar").value = b.dataset.logCod; renderLogistica(); }
 });
+/* Escáner con cámara (solo si el navegador lo permite: Chrome en Android sí; en iPhone no existe esa función y se digita).
+   En la CK65 se sigue usando el lector físico, que escribe el código directo en el buscador. */
+let escanerStream = null, escanerTimer = null, escanerDetector = null;
+const FORMATOS_ESCANER = ["ean_13","ean_8","itf","code_128","code_39","upc_a","upc_e"];
+function escanerDisponible(){
+  return !!(window.BarcodeDetector && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+function detenerEscaner(){
+  clearInterval(escanerTimer); escanerTimer = null;
+  if(escanerStream){ escanerStream.getTracks().forEach(t=> t.stop()); escanerStream = null; }
+  const v = document.getElementById("escanerVideo"); try{ v.pause(); }catch(e){} v.srcObject = null;
+  document.getElementById("escanerOverlay").style.display = "none";
+}
+async function iniciarEscaner(){
+  if(!escanerDisponible()){ showToast("Este navegador no permite escanear con la cámara"); return; }
+  try{
+    let formatos = FORMATOS_ESCANER;
+    if(window.BarcodeDetector.getSupportedFormats){
+      const ok = await window.BarcodeDetector.getSupportedFormats();
+      formatos = FORMATOS_ESCANER.filter(f=> ok.includes(f));
+    }
+    escanerDetector = formatos.length ? new window.BarcodeDetector({ formats: formatos }) : new window.BarcodeDetector();
+    escanerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+  }catch(err){ detenerEscaner(); showToast("No se pudo abrir la cámara (revisa el permiso)"); return; }
+  const v = document.getElementById("escanerVideo");
+  v.srcObject = escanerStream;
+  document.getElementById("escanerOverlay").style.display = "flex";
+  try{ await v.play(); }catch(e){}
+  let ocupado = false;
+  escanerTimer = setInterval(async ()=>{
+    if(ocupado || !escanerStream) return;
+    ocupado = true;
+    try{
+      const r = await escanerDetector.detect(v);
+      if(r && r.length && escanerStream){
+        const texto = String(r[0].rawValue || "").toUpperCase().replace(/[^0-9A-Z]/g,"").slice(0,14);
+        if(texto){
+          detenerEscaner();
+          if(navigator.vibrate) try{ navigator.vibrate(60); }catch(e){}
+          document.getElementById("logBuscar").value = texto;
+          renderLogistica();
+        }
+      }
+    }catch(e){ /* un cuadro sin código: se sigue intentando */ }
+    ocupado = false;
+  }, 250);
+}
+if(escanerDisponible()) document.getElementById("btnEscanear").style.display = "";
+document.getElementById("btnEscanear").addEventListener("click", iniciarEscaner);
+document.getElementById("btnCerrarEscaner").addEventListener("click", detenerEscaner);
+
 document.getElementById("menuLogistica").addEventListener("click", ()=>{
   closeMenu();
   document.getElementById("logBuscar").value = "";
@@ -1485,6 +1553,7 @@ document.getElementById("menuLogistica").addEventListener("click", ()=>{
   setTimeout(()=> document.getElementById("logBuscar").focus(), 50);
 });
 document.getElementById("backFromLogistica").addEventListener("click", ()=>{
+  detenerEscaner();
   if(esRevisor()){ renderRevision(); showScreen("screen-revision"); } else showScreen("screen-home");
 });
 
