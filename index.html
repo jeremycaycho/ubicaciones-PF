@@ -132,6 +132,27 @@
   .escaner-guia{position:relative; width:78%; max-width:340px; height:130px; border:2px solid #22c55e; border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,.45);}
   .escaner-texto{position:relative; margin-top:14px; color:#fff; font-size:13.5px; text-align:center; padding:0 20px; text-shadow:0 1px 3px #000;}
   .btn-escaner-cerrar{position:absolute; bottom:28px; left:50%; transform:translateX(-50%); width:auto; padding:12px 34px;}
+  .th-fl{display:inline-flex; align-items:center; gap:3px; white-space:nowrap;}
+  .btn-filtro-col{background:transparent; border:none; color:var(--muted); padding:2px 3px; cursor:pointer; line-height:1; border-radius:5px;}
+  .btn-filtro-col svg{display:block;}
+  .btn-filtro-col.activo{color:#fff; background:var(--accent);}
+  #filtroColPop{position:fixed; z-index:900; width:230px; max-width:calc(100vw - 16px); background:var(--card); border:1px solid var(--border); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.45); padding:8px; display:none; font-size:13px;}
+  #filtroColPop.mostrar{display:block;}
+  #filtroColPop input[type=text]{width:100%; box-sizing:border-box; padding:7px 8px; border-radius:7px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:13px; margin:0 0 6px;}
+  #filtroColPop .fp-lista{max-height:210px; overflow:auto; border:1px solid var(--border); border-radius:7px; padding:3px 4px; background:var(--card2);}
+  #filtroColPop label{display:flex; align-items:center; gap:7px; padding:4px 2px; color:var(--text); margin:0; font-size:13px; cursor:pointer;}
+  #filtroColPop label input{margin:0; width:auto;}
+  #filtroColPop .fp-botones{display:flex; gap:6px; margin-top:7px;}
+  #filtroColPop .fp-botones button{flex:1; padding:7px 4px; border-radius:7px; font-size:13px; cursor:pointer; border:1px solid var(--border); background:var(--card2); color:var(--text);}
+  #filtroColPop .fp-botones .fp-ok{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .fila-filtros th{padding:3px 4px; background:var(--card);}
+  .filtro-col{width:100%; min-width:64px; box-sizing:border-box; padding:5px 6px; border-radius:7px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:12px; margin:0;}
+  .filtro-col.activo{border-color:var(--accent);}
+  .mr-campo{margin-bottom:10px;}
+  .mr-campo label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px;}
+  .mr-campo input, .mr-campo select{width:100%; padding:9px 10px; border-radius:9px; background:var(--card2); border:1px solid var(--border); color:var(--text); font-size:15px; margin:0; box-sizing:border-box;}
+  .mr-campo input:focus, .mr-campo select:focus{outline:none; border-color:var(--accent);}
+  .btn-editar-reg{background:transparent; border:none; font-size:15px; padding:2px 4px; cursor:pointer; line-height:1;}
   .btn-texto{background:none; border:none; padding:4px 0; color:var(--muted); font-size:11.5px; text-decoration:underline; cursor:pointer; width:auto;}
   .btn-texto:active{opacity:.6;}
   #ubicPosicionesAbajo{margin:0 0 4px 2px;}
@@ -188,12 +209,13 @@
   .chips-rev button{padding:6px 11px; border-radius:20px; border:1px solid var(--border); background:var(--card2); color:var(--muted); font-size:12px; font-weight:600;}
   .chips-rev button.activa{background:var(--accent); border-color:var(--accent); color:#fff;}
   .rev-resumen{font-size:12px; color:var(--muted);}
-  .btn-copiar{background:transparent; border:none; color:var(--muted); padding:3px 4px; cursor:pointer; line-height:1; vertical-align:middle;}
-  .btn-copiar svg{display:block;}
-  .btn-copiar:active{opacity:.5;}
+  .btn-copiar, .btn-icono-fila{background:transparent; border:none; color:var(--muted); padding:3px 4px; cursor:pointer; line-height:1; vertical-align:middle;}
+  .btn-copiar svg, .btn-icono-fila svg{display:block;}
+  .btn-copiar:active, .btn-icono-fila:active{opacity:.5;}
   #revBody tr{cursor:pointer;}
   .barra-sel{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px; color:var(--muted);}
   .barra-sel .btn-card{padding:8px 12px;}
+  .barra-sel .btn-elim{color:var(--rojo); border-color:var(--rojo);}
   .barra-sel .btn-exp{background:var(--accent); border-color:var(--accent); color:#fff;}
   .prov-card.seleccionada{outline:2px solid var(--accent);}
   .sel-card{display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; cursor:pointer; margin-right:auto; padding:6px 4px;}
@@ -509,9 +531,10 @@
     </div>
     <div class="rev-resumen" id="revResumen"></div>
     <div class="hint-rev" id="revHint"></div>
+    <div style="margin:2px 0 6px;"><button class="btn-texto" id="btnLimpiarFiltrosCol" style="display:none;">✕ Limpiar filtros</button></div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Proveedor</th><th>Código Proveedor</th><th>Código</th><th>Descripción</th><th>Lote</th><th>Fecha Vcto</th><th>Cantidad</th><th>Ubicación</th><th>UDC</th><th>Usuario</th><th>Estado</th><th>Fecha</th><th>Hora</th></tr></thead>
+        <thead><tr><th></th><th><span class="th-fl">Proveedor<button class="btn-filtro-col" data-fcol="0" aria-label="Filtrar Proveedor" title="Filtrar Proveedor"></button></span></th><th><span class="th-fl">Código Proveedor<button class="btn-filtro-col" data-fcol="1" aria-label="Filtrar Código Proveedor" title="Filtrar Código Proveedor"></button></span></th><th><span class="th-fl">Código<button class="btn-filtro-col" data-fcol="2" aria-label="Filtrar Código" title="Filtrar Código"></button></span></th><th><span class="th-fl">Descripción<button class="btn-filtro-col" data-fcol="3" aria-label="Filtrar Descripción" title="Filtrar Descripción"></button></span></th><th><span class="th-fl">Lote<button class="btn-filtro-col" data-fcol="4" aria-label="Filtrar Lote" title="Filtrar Lote"></button></span></th><th><span class="th-fl">Fecha Vcto<button class="btn-filtro-col" data-fcol="5" aria-label="Filtrar Fecha Vcto" title="Filtrar Fecha Vcto"></button></span></th><th><span class="th-fl">Cantidad<button class="btn-filtro-col" data-fcol="6" aria-label="Filtrar Cantidad" title="Filtrar Cantidad"></button></span></th><th><span class="th-fl">Ubicación<button class="btn-filtro-col" data-fcol="7" aria-label="Filtrar Ubicación" title="Filtrar Ubicación"></button></span></th><th><span class="th-fl">UDC<button class="btn-filtro-col" data-fcol="8" aria-label="Filtrar UDC" title="Filtrar UDC"></button></span></th><th><span class="th-fl">Usuario<button class="btn-filtro-col" data-fcol="9" aria-label="Filtrar Usuario" title="Filtrar Usuario"></button></span></th><th><span class="th-fl">Estado<button class="btn-filtro-col" data-fcol="10" aria-label="Filtrar Estado" title="Filtrar Estado"></button></span></th><th><span class="th-fl">Fecha<button class="btn-filtro-col" data-fcol="11" aria-label="Filtrar Fecha" title="Filtrar Fecha"></button></span></th><th><span class="th-fl">Hora<button class="btn-filtro-col" data-fcol="12" aria-label="Filtrar Hora" title="Filtrar Hora"></button></span></th></tr></thead>
         <tbody id="revBody"></tbody>
       </table>
     </div>
@@ -590,6 +613,38 @@
     <button class="btn" data-est="corregir_lote">⚠️ Corregir lote</button>
     <button class="btn" data-est="no_ingresado">↩ No ingresado</button>
     <button class="btn btn-outline" id="modalEstadoCancelar">Cancelar</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalRegistroOverlay">
+  <div class="modal-caja" style="max-width:340px;">
+    <h3 id="modalRegistroTitulo">Editar registro</h3>
+    <div class="mr-campo"><label>Proveedor</label><select id="mrProveedor"></select></div>
+    <div id="mrExtra">
+      <div class="mr-campo"><label>Código</label><input type="text" id="mrCodigo" maxlength="7" autocapitalize="characters"></div>
+      <div class="mr-campo"><label>Lote</label><input type="text" id="mrLote" autocapitalize="characters"></div>
+      <div class="mr-campo"><label>Vencimiento (DD-MM-AA)</label><input type="text" id="mrVcto" maxlength="8" inputmode="numeric"></div>
+      <div class="mr-campo"><label>Cantidad</label><input type="text" id="mrCantidad" inputmode="numeric"></div>
+      <div class="mr-campo"><label>Ubicación</label><input type="text" id="mrUbicacion" autocapitalize="characters"></div>
+    </div>
+    <div class="modal-botones">
+      <button class="btn btn-outline" id="mrCancelar">Cancelar</button>
+      <button class="btn btn-accent" id="mrGuardar">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalElimExpOverlay">
+  <div class="modal-caja">
+    <h3 id="modalElimExpTitulo">Eliminar del Sheet</h3>
+    <p id="modalElimExpDetalle" style="font-size:13.5px; line-height:1.45; margin:0 0 16px; color:var(--muted);"></p>
+    <div class="modal-botones" id="modalElimExpBotones">
+      <button class="btn" id="modalElimExpCancelar">Cancelar</button>
+      <button class="btn" id="modalElimExpConfirmar" style="background:var(--rojo); border-color:var(--rojo); color:#fff;">Sí, eliminar</button>
+    </div>
+    <div class="modal-botones" id="modalElimExpCerrarWrap" style="display:none;">
+      <button class="btn" id="modalElimExpCerrar">Entendido</button>
+    </div>
   </div>
 </div>
 
@@ -694,7 +749,7 @@ function filaEditableTr(r, mostrarFecha){
   const celda = (campo, valor) => `<td class="cell-editable" data-id="${r.id}" data-campo="${campo}">${escAttr(valor)}</td>`;
   const resumen = escAttr((r.codigo||"") + " (Lote " + (r.lote||"") + ")");
   return `<tr>
-    <td><button class="btn-borrar-fila cell-borrar" data-id="${r.id}" data-resumen="${resumen}" aria-label="Borrar fila">🗑️</button></td>
+    <td><button class="btn-borrar-fila cell-borrar" data-id="${r.id}" data-resumen="${resumen}" aria-label="Borrar fila">🗑️</button><button class="btn-borrar-fila" data-cambiar-prov="${r.id}" aria-label="Cambiar proveedor" title="Cambiar proveedor">🔁</button></td>
     ${celda("codigo", r.codigo)}
     ${celda("lote", r.lote)}
     ${celda("vcto", r.vcto)}
@@ -766,6 +821,78 @@ function editarCampoLocal(id, campo, valor){
     syncAll();
   }
 }
+
+/* ---------- EDITAR REGISTRO: cambiar proveedor (todos) y corregir todos los datos (YUBICKSA y EDWIN) ---------- */
+let registroEditandoId = null, registroEditandoModo = "proveedor";
+function abrirModalRegistro(id, modo){
+  if(modo === "completo" && !esRevisor()) modo = "proveedor";
+  const r = loadRows().find(x=> String(x.id) === String(id));
+  if(!r){ showToast("No se encontró el registro"); return; }
+  registroEditandoId = id; registroEditandoModo = modo;
+  const lista = loadProveedores().slice();
+  if(r.proveedor && !lista.includes(r.proveedor)) lista.unshift(r.proveedor);
+  const sel = document.getElementById("mrProveedor");
+  sel.innerHTML = lista.map(p=>'<option value="' + escAttr(p) + '">' + escAttr(p) + '</option>').join("");
+  sel.value = r.proveedor;
+  document.getElementById("mrExtra").style.display = (modo === "completo") ? "" : "none";
+  document.getElementById("modalRegistroTitulo").textContent = (modo === "completo" ? "Editar registro" : "Cambiar proveedor") + " · " + (r.codigo || "");
+  document.getElementById("mrCodigo").value = r.codigo || "";
+  document.getElementById("mrLote").value = r.lote || "";
+  document.getElementById("mrVcto").value = r.vcto || "";
+  document.getElementById("mrCantidad").value = (r.cantidad === 0 || r.cantidad) ? r.cantidad : "";
+  document.getElementById("mrUbicacion").value = r.ubicacion || "";
+  document.getElementById("modalRegistroOverlay").classList.add("mostrar");
+}
+function cerrarModalRegistro(){ document.getElementById("modalRegistroOverlay").classList.remove("mostrar"); registroEditandoId = null; }
+// Guarda varios campos de una vez: se ve al instante y se envía a Sheets (misma ruta que las demás ediciones)
+function editarRegistroLocal(id, cambios){
+  let hubo = false;
+  const rows = loadRows().map(r=>{
+    if(String(r.id) !== String(id)) return r;
+    const nuevo = {...r};
+    Object.keys(cambios).forEach(c=>{
+      const v = c === "cantidad" ? Number(cambios[c] || 0) : cambios[c];
+      if(String(nuevo[c]) !== String(v)){ nuevo[c] = v; hubo = true; }
+    });
+    if(hubo && r.sincronizado) nuevo.edicionPendiente = true;
+    return hubo ? nuevo : r;
+  });
+  if(hubo){ saveRows(rows); showToast("Cambio guardado"); syncAll(); }
+  return hubo;
+}
+document.addEventListener("click", (e)=>{
+  const b = e.target.closest("[data-cambiar-prov]");
+  if(b) abrirModalRegistro(b.dataset.cambiarProv, "proveedor");
+});
+document.getElementById("mrCancelar").addEventListener("click", cerrarModalRegistro);
+document.getElementById("modalRegistroOverlay").addEventListener("click", (e)=>{ if(e.target.id === "modalRegistroOverlay") cerrarModalRegistro(); });
+document.getElementById("mrGuardar").addEventListener("click", ()=>{
+  if(registroEditandoId == null) return;
+  const id = registroEditandoId;
+  const cambios = { proveedor: document.getElementById("mrProveedor").value };
+  if(registroEditandoModo === "completo"){
+    const actual = loadRows().find(x=> String(x.id) === String(id)) || {};
+    const codigo = document.getElementById("mrCodigo").value.trim().toUpperCase();
+    const vcto = document.getElementById("mrVcto").value.trim();
+    const cant = document.getElementById("mrCantidad").value.replace(/[^0-9]/g,"");
+    if(!codigo){ showToast("El código no puede quedar vacío"); return; }
+    if(vcto !== String(actual.vcto || "") && vcto && !/^\d{2}-\d{2}-\d{2}$/.test(vcto)){ showToast("Vencimiento: formato DD-MM-AA"); return; }
+    cambios.codigo = codigo;
+    cambios.lote = document.getElementById("mrLote").value.trim().toUpperCase();
+    cambios.vcto = vcto;
+    cambios.cantidad = cant;
+    cambios.ubicacion = document.getElementById("mrUbicacion").value.trim().toUpperCase();
+  }
+  cerrarModalRegistro();
+  editarRegistroLocal(id, cambios);
+  ["screen-tabla","screen-historial-tabla","screen-revision","screen-avance"].forEach(sc=>{
+    if(!document.getElementById(sc).classList.contains("active")) return;
+    if(sc === "screen-tabla") renderTablaProveedor();
+    else if(sc === "screen-historial-tabla") renderHistorialTablaBody();
+    else if(sc === "screen-revision") renderRevision(true);
+    else renderAvance();
+  });
+});
 
 /* ---------- BORRAR FILA (con ventanita de confirmación) ---------- */
 const STORAGE_ELIMINACIONES = "ubicaciones_eliminaciones_pendientes_v1";
@@ -921,6 +1048,8 @@ function logout(){
 const USUARIOS_REVISORES = ["YUBICKSA","EDWIN"];
 function esRevisor(){ return USUARIOS_REVISORES.includes(currentUser); }
 function nombreBonito(u){ u = String(u||""); return u.charAt(0).toUpperCase() + u.slice(1).toLowerCase(); }
+let revColFiltros = {}; // columna (0..12 = Proveedor..Hora) -> Set de valores permitidos
+let revFilasAntesCol = [];
 let revProv = "", revEstado = "pendientes", revDia = "hoy", revBuscar = "", revOpcionesFirma = "";
 
 function textoEstadoPara(est){
@@ -950,6 +1079,7 @@ function irAPestanaRevision(cual){
   else { renderRevision(); showScreen("screen-revision"); }
 }
 // Ícono estándar de "copiar" (dos hojas superpuestas)
+const ICONO_EDITAR = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>';
 const ICONO_COPIAR = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
 const ICONO_EXPORTAR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
 // Celda con el valor y un ícono para copiarlo al portapapeles (solo el UDC en la vista de revisión)
@@ -1024,7 +1154,7 @@ function xmlHoja(filas, anchos){
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' + cols + '<sheetData>' + datos + '</sheetData></worksheet>';
 }
 function exportarTarjetasExcel(terminados){
-  if(!terminados || terminados.length === 0) return;
+  if(!terminados || terminados.length === 0) return false;
   const listaUnica = (rows, f)=> [...new Set(rows.map(f).filter(Boolean))].join(", ");
   const resumen = [["Fecha","Proveedor","Registros","Registraron","Ingresaron","Primer registro","Último registro"]];
   const detalle = [["Proveedor","Código Proveedor","Código","Descripción","Lote","Fecha Vcto","Cantidad","Ubicación","UDC","Usuario","Estado","Fecha","Hora"]];
@@ -1056,8 +1186,26 @@ function exportarTarjetasExcel(terminados){
   a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click();
   setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
   showToast("Excel generado: " + terminados.length + " proveedor(es)");
+  return true;
 }
 
+const ICONO_FILTRO = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>';
+document.querySelectorAll(".btn-filtro-col").forEach(b=>{ b.innerHTML = ICONO_FILTRO; });
+// Filtra por columnas estilo Excel; 'excepto' = columna cuyo filtro no se aplica (para listar sus valores)
+function filasConFiltrosColumna(rows, excepto){
+  const ks = Object.keys(revColFiltros).filter(k=> String(k) !== String(excepto));
+  if(!ks.length) return rows;
+  return rows.filter(r=>{ const c = textosColumnas(r); return ks.every(k=> revColFiltros[k].has(c[k])); });
+}
+function marcarEmbudos(){
+  document.querySelectorAll(".btn-filtro-col").forEach(b=> b.classList.toggle("activo", !!revColFiltros[b.dataset.fcol]));
+}
+// Texto de cada columna tal como se ve en la tabla (para filtrar)
+function textosColumnas(r){
+  const quien = quienIngreso(r), est = estadoInfo(r.estado);
+  const estado = r.estado === "ingresado" && quien ? "Ingresado · " + quien : est.texto;
+  return [r.proveedor, r.codigoProveedor, r.codigo, r.descripcion, r.lote, r.vcto, r.cantidad, r.ubicacion, r.udc, r.usuario, estado, r.fechaKey, r.hora].map(v=> String(v == null ? "" : v));
+}
 function renderRevision(desdeSync){
   const base = revFilasDelDia();
   // opciones del selector de proveedor: solo se reconstruye si cambió la lista (para no cerrar el desplegable mientras se usa)
@@ -1080,13 +1228,19 @@ function renderRevision(desdeSync){
   else if(revEstado === "ingresado") rows = rows.filter(r=>r.estado==="ingresado");
   else if(revEstado === "corregir_lote") rows = rows.filter(r=>r.estado==="corregir_lote");
   if(revBuscar){ const q = revBuscar.toUpperCase(); rows = rows.filter(r=> String(r.codigo||"").toUpperCase().includes(q)); }
+  revFilasAntesCol = rows;
+  const colKeys = Object.keys(revColFiltros);
+  if(colKeys.length) rows = filasConFiltrosColumna(rows, null);
+  marcarEmbudos();
+  document.getElementById("btnLimpiarFiltrosCol").style.display = colKeys.length ? "" : "none";
   rows.sort((a,b)=> Number(a.id) - Number(b.id)); // el orden en que se fueron registrando
-  document.getElementById("revResumen").textContent = totalProv + " registros · " + pend + " pendientes" + (revProv ? " · " + revProv : "");
+  document.getElementById("revResumen").textContent = totalProv + " registros · " + pend + " pendientes" + (revProv ? " · " + revProv : "") + (colKeys.length ? " · mostrando " + rows.length : "");
   document.getElementById("revBody").innerHTML = rows.map(r=>{
     const est = estadoInfo(r.estado);
     const quien = quienIngreso(r);
     const texto = r.estado === "ingresado" && quien ? "Ingresado · " + escAttr(quien) : est.texto;
     return `<tr data-fila-id="${escAttr(r.id)}" class="${claseMarca(r.id)}">
+      <td><button class="btn-icono-fila" data-editar-reg="${escAttr(r.id)}" aria-label="Editar registro" title="Editar registro">${ICONO_EDITAR}</button></td>
       <td>${escAttr(r.proveedor)}</td><td>${celdaCopiable(r.codigoProveedor)}</td>
       <td>${escAttr(r.codigo)}</td><td class="celda-desc">${escAttr(r.descripcion)}</td>
       <td>${celdaCopiable(r.lote, colorearLote(r.lote))}</td><td>${escAttr(r.vcto)}</td><td>${escAttr(r.cantidad)}</td>
@@ -1104,6 +1258,53 @@ function claveOcultas(){ return "ubicaciones_tarjetas_ocultas_v1_" + currentUser
 function cargarOcultas(){ try{ return JSON.parse(localStorage.getItem(claveOcultas()) || "[]"); }catch(_e){ return []; } }
 function guardarOcultas(l){ try{ localStorage.setItem(claveOcultas(), JSON.stringify(l)); }catch(_e){} }
 function claveTarjeta(g){ return g.fecha + "|" + g.prov + "|" + g.total; } // si cambia la cantidad de filas, la tarjeta vuelve a aparecer
+const ICONO_BASURA = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>';
+/* ---- Eliminar proveedores terminados del Sheet (se borra exactamente lo seleccionado; Exportar es un botón aparte) ---- */
+let elimExpPendiente = null;
+function modalElimExp(modo, titulo, texto){
+  document.getElementById("modalElimExpTitulo").textContent = titulo;
+  document.getElementById("modalElimExpDetalle").textContent = texto;
+  document.getElementById("modalElimExpBotones").style.display = (modo === "confirmar") ? "flex" : "none";
+  document.getElementById("modalElimExpCerrarWrap").style.display = (modo === "confirmar") ? "none" : "flex";
+  document.getElementById("modalElimExpOverlay").classList.add("mostrar");
+}
+function eliminarTarjetas(grupos){
+  if(!grupos || !grupos.length) return;
+  // Se comprueba con lo que hay ahora mismo: todo debe seguir terminado y sin cambios sin enviar
+  const actuales = new Map(loadRows().map(r=>[String(r.id), r]));
+  const vigentes = grupos.map(rs=> rs.map(r=> actuales.get(String(r.id))).filter(Boolean)).filter(rs=> rs.length);
+  const sinTerminar = vigentes.some(rs=> rs.some(r=> r.estado !== "ingresado" || !r.sincronizado || r.estadoPendiente || r.edicionPendiente));
+  if(!vigentes.length || sinTerminar){ showToast("Algo cambió en esas tarjetas: revisa Avance y vuelve a intentar"); renderAvance(); return; }
+  const ids = []; vigentes.forEach(rs=> rs.forEach(r=> ids.push(String(r.id))));
+  elimExpPendiente = { ids: ids, provs: vigentes.map(rs=> rs[0].proveedor), nFilas: ids.length };
+  modalElimExp("confirmar", "Eliminar del Sheet",
+    "Se eliminarán " + ids.length + " fila(s) de " + vigentes.length + " proveedor(es) (" + elimExpPendiente.provs.join(", ") +
+    ") del Sheet y de todos los equipos. Esto no se puede deshacer. Si necesitas esa información, exporta antes. ¿Eliminar?");
+}
+async function confirmarEliminarExportadas(){
+  const p = elimExpPendiente; if(!p) return;
+  elimExpPendiente = null;
+  const set = new Set(p.ids);
+  saveRows(loadRows().filter(r=> !set.has(String(r.id))));   // solo lo exportado; lo nuevo que haya llegado no se toca
+  const pend = cargarEliminacionesPendientes();
+  p.ids.forEach(id=>{ if(!pend.includes(id)) pend.push(id); });
+  guardarEliminacionesPendientes(pend);
+  avanceSel.clear(); renderAvance();
+  modalElimExp("espera", "Eliminando…", "Enviando la orden de eliminar al Sheet. Un momento…");
+  syncAll();
+  for(let i = 0; i < 50; i++){                                 // espera hasta ~25 s a que el Sheet confirme
+    if(!cargarEliminacionesPendientes().some(id=> set.has(id))) break;
+    await new Promise(r=> setTimeout(r, 500));
+  }
+  const quedan = cargarEliminacionesPendientes().filter(id=> set.has(id)).length;
+  if(quedan === 0) modalElimExp("listo", "Eliminado", "Se eliminaron " + p.nFilas + " fila(s) de " + p.provs.length + " proveedor(es) (" + p.provs.join(", ") + ") del Sheet.");
+  else modalElimExp("listo", "Pendiente de eliminar", quedan + " de " + p.nFilas + " fila(s) todavía no se eliminaron del Sheet (sin conexión o respuesta lenta). Ya no se ven en la app y se eliminarán solas apenas haya conexión.");
+  if(document.getElementById("screen-avance").classList.contains("active")) renderAvance();
+}
+document.getElementById("modalElimExpCancelar").addEventListener("click", ()=>{ elimExpPendiente = null; document.getElementById("modalElimExpOverlay").classList.remove("mostrar"); showToast("No se eliminó nada"); });
+document.getElementById("modalElimExpConfirmar").addEventListener("click", confirmarEliminarExportadas);
+document.getElementById("modalElimExpCerrar").addEventListener("click", ()=> document.getElementById("modalElimExpOverlay").classList.remove("mostrar"));
+
 let avanceVerOcultas = false;
 const avanceSel = new Set(); // tarjetas terminadas marcadas para exportar juntas
 function renderAvance(){
@@ -1111,41 +1312,31 @@ function renderAvance(){
   const grupos = new Map();
   base.forEach(r=>{ const k = r.fechaKey + "|" + r.proveedor; if(!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(r); });
   const cont = document.getElementById("avanceCards");
-  const ocultas = cargarOcultas();
-  let nOcultas = 0;
   const lista = [...grupos.values()].map(rows=>{
     const total = rows.length;
     const ing = rows.filter(r=>r.estado==="ingresado").length;
     const cor = rows.filter(r=>r.estado==="corregir_lote").length;
     const pen = total - ing - cor;
     return {fecha: rows[0].fechaKey, prov: rows[0].proveedor, rows, total, ing, cor, pen, terminada: pen === 0 && cor === 0};
-  }).filter(g=>{
-    const oculta = g.terminada && ocultas.includes(claveTarjeta(g));
-    if(oculta) nOcultas++;
-    return avanceVerOcultas ? oculta : !oculta;
   }).sort((a,b)=> (b.pen>0) - (a.pen>0) || b.pen - a.pen || parseFechaKey(b.fecha) - parseFechaKey(a.fecha) || a.prov.localeCompare(b.prov));
   // la selección solo conserva tarjetas terminadas que siguen visibles
-  const clavesTerminadasVisibles = new Set(lista.filter(g=>g.terminada && !avanceVerOcultas).map(claveTarjeta));
+  const clavesTerminadasVisibles = new Set(lista.filter(g=>g.terminada).map(claveTarjeta));
   [...avanceSel].forEach(k=>{ if(!clavesTerminadasVisibles.has(k)) avanceSel.delete(k); });
   const barra = document.getElementById("avanceBarra");
   if(clavesTerminadasVisibles.size > 0){
     barra.style.display = "flex";
     barra.innerHTML = (avanceSel.size
-      ? '<span>' + avanceSel.size + ' seleccionada(s)</span><button class="btn-card btn-exp" id="btnExportarSel">' + ICONO_EXPORTAR + '<span>Exportar (' + avanceSel.size + ')</span></button><button class="btn-card" id="btnLimpiarSel">Limpiar</button>'
-      : '<span>Marca las tarjetas terminadas que quieras exportar juntas</span>')
+      ? '<span>' + avanceSel.size + ' seleccionada(s)</span><button class="btn-card btn-exp" id="btnExportarSel">' + ICONO_EXPORTAR + '<span>Exportar (' + avanceSel.size + ')</span></button><button class="btn-card btn-elim" id="btnEliminarSel">' + ICONO_BASURA + '<span>Eliminar (' + avanceSel.size + ')</span></button><button class="btn-card" id="btnLimpiarSel">Limpiar</button>'
+      : '<span>Marca las tarjetas terminadas que quieras exportar o eliminar</span>')
       + (avanceSel.size < clavesTerminadasVisibles.size ? '<button class="btn-card" id="btnSelTodas">Seleccionar todas las terminadas (' + clavesTerminadasVisibles.size + ')</button>' : "");
     const be = document.getElementById("btnExportarSel"); if(be) be.onclick = ()=>{ exportarTarjetasExcel(lista.filter(g=>avanceSel.has(claveTarjeta(g))).map(g=>g.rows)); avanceSel.clear(); renderAvance(); };
+    const bx = document.getElementById("btnEliminarSel"); if(bx) bx.onclick = ()=>{ eliminarTarjetas(lista.filter(g=>avanceSel.has(claveTarjeta(g))).map(g=>g.rows)); };
     const bl = document.getElementById("btnLimpiarSel"); if(bl) bl.onclick = ()=>{ avanceSel.clear(); renderAvance(); };
     const bt = document.getElementById("btnSelTodas"); if(bt) bt.onclick = ()=>{ clavesTerminadasVisibles.forEach(k=>avanceSel.add(k)); renderAvance(); };
   } else { barra.style.display = "none"; barra.innerHTML = ""; }
-  const hint = document.getElementById("avanceHint");
-  hint.innerHTML = avanceVerOcultas
-    ? 'Mostrando tarjetas ocultas. <a href="#" id="lnkOcultas">Volver a las tarjetas</a>'
-    : (nOcultas ? nOcultas + ' tarjeta(s) oculta(s). <a href="#" id="lnkOcultas">Ver ocultas</a>' : "");
-  const lnk = document.getElementById("lnkOcultas");
-  if(lnk) lnk.addEventListener("click", (ev)=>{ ev.preventDefault(); avanceVerOcultas = !avanceVerOcultas; renderAvance(); });
+  document.getElementById("avanceHint").innerHTML = "";
   if(lista.length === 0){
-    cont.innerHTML = '<div class="empty-msg">' + (avanceVerOcultas ? "No hay tarjetas ocultas." : (revDia === "hoy" ? "Todavía no hay registros hoy." : "No hay registros.")) + '</div>';
+    cont.innerHTML = '<div class="empty-msg">' + (revDia === "hoy" ? "Todavía no hay registros hoy." : "No hay registros.") + '</div>';
     marcarChips(); return;
   }
   cont.innerHTML = "";
@@ -1160,8 +1351,7 @@ function renderAvance(){
     card.className = "prov-card" + (g.terminada ? " completo" : "") + (seleccionada ? " seleccionada" : "");
     const acciones = g.terminada ? `
       <div class="acciones-card">
-        ${avanceVerOcultas ? "" : `<label class="sel-card"><input type="checkbox" data-sel="1" ${seleccionada ? "checked" : ""}> Seleccionar</label>`}
-        <button class="btn-card btn-card-ok" data-ocultar="1" title="${avanceVerOcultas ? "Volver a mostrar" : "Quitar tarjeta"}">${avanceVerOcultas ? "↩" : "✓"}</button>
+        <label class="sel-card"><input type="checkbox" data-sel="1" ${seleccionada ? "checked" : ""}> Seleccionar</label>
       </div>` : "";
     card.innerHTML = `
       <div class="name">${escAttr(g.prov)}${g.terminada ? " ✅" : ""}${revDia === "todo" ? ' <span class="fecha-card">' + escAttr(g.fecha) + '</span>' : ""}</div>
@@ -1175,12 +1365,6 @@ function renderAvance(){
         ev.stopPropagation();
         if(ev.target.matches("input")){ const k = claveTarjeta(g); if(ev.target.checked) avanceSel.add(k); else avanceSel.delete(k); renderAvance(); }
         return;
-      }
-      if(ev.target.closest("[data-ocultar]")){
-        ev.stopPropagation();
-        const k = claveTarjeta(g); let l = cargarOcultas();
-        l = avanceVerOcultas ? l.filter(x=>x!==k) : (l.includes(k) ? l : l.concat([k]));
-        guardarOcultas(l); renderAvance(); return;
       }
       revProv = g.prov; revEstado = "pendientes"; revBuscar = ""; document.getElementById("revBuscar").value = "";
       if(g.fecha !== todayKey()) revDia = "todo";
@@ -1203,12 +1387,62 @@ document.addEventListener("click", (e)=>{
   }
   const cop = e.target.closest("[data-copiar]");
   if(cop){ copiarTexto(cop.dataset.copiar); return; }
+  const edReg = e.target.closest("[data-editar-reg]");
+  if(edReg){ abrirModalRegistro(edReg.dataset.editarReg, "completo"); return; }
   const pill = e.target.closest("[data-rev-id]");
   if(pill){ abrirModalEstado(pill.dataset.revId); return; }
   const fila = e.target.closest("#revBody tr[data-fila-id]");
   if(fila){ alternarMarca(fila.dataset.filaId); renderRevision(true); }
 });
 document.getElementById("revProveedor").addEventListener("change", (e)=>{ revProv = e.target.value; renderRevision(); });
+(function(){
+  const pop = document.createElement("div"); pop.id = "filtroColPop";
+  pop.innerHTML = '<input type="text" class="fp-buscar" placeholder="Buscar..." autocomplete="off"><div class="fp-lista"></div><div class="fp-botones"><button class="fp-limpiar">Limpiar</button><button class="fp-ok">Aceptar</button></div>';
+  document.body.appendChild(pop);
+  let col = null, valores = [], sel = new Set();
+  const lista = pop.querySelector(".fp-lista"), buscar = pop.querySelector(".fp-buscar");
+  const visibles = ()=>{ const q = buscar.value.trim().toUpperCase(); return valores.map((v,i)=>({v,i})).filter(x=> !q || x.v.toUpperCase().includes(q)); };
+  function pintar(){
+    const vis = visibles();
+    const todos = vis.length && vis.every(x=> sel.has(x.v));
+    lista.innerHTML = '<label><input type="checkbox" data-todo="1" ' + (todos ? "checked" : "") + '> (Seleccionar todo)</label>' +
+      vis.map(x=> '<label><input type="checkbox" data-i="' + x.i + '" ' + (sel.has(x.v) ? "checked" : "") + '> ' + (x.v === "" ? "(Vacías)" : escAttr(x.v)) + '</label>').join("");
+  }
+  function abrir(btn){
+    col = btn.dataset.fcol;
+    const base = filasConFiltrosColumna(revFilasAntesCol, col);
+    const set = new Set(base.map(r=> textosColumnas(r)[col]));
+    valores = [...set].sort((a,b)=> (col === "6") ? Number(a) - Number(b) : a.localeCompare(b, "es", {numeric:true}));
+    sel = revColFiltros[col] ? new Set(valores.filter(v=> revColFiltros[col].has(v))) : new Set(valores);
+    buscar.value = ""; pintar();
+    pop.classList.add("mostrar");
+    const r = btn.getBoundingClientRect(), w = pop.offsetWidth;
+    pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + "px";
+    pop.style.top = Math.min(r.bottom + 4, Math.max(8, window.innerHeight - pop.offsetHeight - 8)) + "px";
+  }
+  function cerrar(){ pop.classList.remove("mostrar"); col = null; }
+  buscar.addEventListener("input", pintar);
+  lista.addEventListener("change", (e)=>{
+    const c = e.target;
+    if(c.dataset.todo){ visibles().forEach(x=>{ c.checked ? sel.add(x.v) : sel.delete(x.v); }); pintar(); }
+    else sel[c.checked ? "add" : "delete"](valores[Number(c.dataset.i)]);
+  });
+  pop.querySelector(".fp-ok").addEventListener("click", ()=>{
+    if(col == null) return;
+    if(sel.size === valores.length) delete revColFiltros[col]; else revColFiltros[col] = new Set(sel);
+    cerrar(); renderRevision(true);
+  });
+  pop.querySelector(".fp-limpiar").addEventListener("click", ()=>{ if(col == null) return; delete revColFiltros[col]; cerrar(); renderRevision(true); });
+  document.addEventListener("click", (e)=>{
+    const b = e.target.closest(".btn-filtro-col");
+    if(b){ e.stopPropagation(); const mismo = pop.classList.contains("mostrar") && col === b.dataset.fcol; cerrar(); if(!mismo) abrir(b); return; }
+    if(pop.classList.contains("mostrar") && !e.target.closest("#filtroColPop")) cerrar();
+  }, true);
+})();
+document.getElementById("btnLimpiarFiltrosCol").addEventListener("click", ()=>{
+  revColFiltros = {};
+  renderRevision(true);
+});
 document.getElementById("revBuscar").addEventListener("input", (e)=>{ revBuscar = e.target.value.trim(); renderRevision(); });
 document.getElementById("btnMenuRev").addEventListener("click", openMenu);
 document.getElementById("btnMenuAv").addEventListener("click", openMenu);
@@ -2252,19 +2486,23 @@ async function pushEdiciones(){
 // Avisa a Google Sheets que borre las filas marcadas para eliminar (las que ya estaban
 // sincronizadas cuando se borraron desde la app).
 async function pushEliminaciones(){
-  const pendientes = cargarEliminacionesPendientes();
-  if(pendientes.length === 0) return;
-  try{
-    const resp = await fetch(SHEET_WEB_APP_URL, {
-      method: "POST",
-      headers: {"Content-Type": "text/plain;charset=utf-8"},
-      body: JSON.stringify({ eliminaciones: pendientes })
-    });
-    // Igual que con inserciones/ediciones: en cuanto se entrega la petición se da por
-    // aplicada (Apps Script a veces no deja leer la respuesta aunque sí se ejecutó).
-    guardarEliminacionesPendientes([]);
-    try{ await resp.json(); }catch(_e){}
-  }catch(err){ /* fallo real de red: se reintenta en el próximo ciclo */ }
+  let pendientes = cargarEliminacionesPendientes();
+  // Se envían en lotes de 60 (borrar muchas filas de golpe tardaría demasiado en un solo envío)
+  while(pendientes.length > 0){
+    const lote = pendientes.slice(0, 60);
+    try{
+      const resp = await fetch(SHEET_WEB_APP_URL, {
+        method: "POST",
+        headers: {"Content-Type": "text/plain;charset=utf-8"},
+        body: JSON.stringify({ eliminaciones: lote })
+      });
+      // Igual que con inserciones/ediciones: en cuanto se entrega la petición se da por
+      // aplicada (Apps Script a veces no deja leer la respuesta aunque sí se ejecutó).
+      guardarEliminacionesPendientes(cargarEliminacionesPendientes().filter(id=> !lote.includes(id)));
+      try{ await resp.json(); }catch(_e){}
+    }catch(err){ return; /* fallo real de red: se reintenta en el próximo ciclo */ }
+    pendientes = cargarEliminacionesPendientes();
+  }
 }
 
 // Trae TODO lo que hay guardado en Google Sheets (sin importar desde qué dispositivo se
