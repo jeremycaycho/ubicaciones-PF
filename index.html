@@ -186,6 +186,16 @@
   .table-scroll::-webkit-scrollbar{height:4px;}
   .table-scroll::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
 
+  /* Tabla de revisores: caja propia con barras de desplazamiento siempre a la vista (horizontal y
+     vertical) y encabezado fijo, para llegar a las columnas de la derecha sin bajar hasta el final */
+  .rev-scroll{overflow:auto; max-height:calc(100vh - 70px); min-height:260px; -webkit-overflow-scrolling:touch;}
+  .rev-scroll::-webkit-scrollbar{height:14px; width:14px;}
+  .rev-scroll::-webkit-scrollbar-track{background:var(--card2);}
+  .rev-scroll::-webkit-scrollbar-thumb{background:#52525b; border-radius:8px; border:3px solid var(--card2);}
+  .nav-cols{float:right; display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted);}
+  .btn-nav-col{background:var(--card2); border:1px solid var(--border); color:var(--text); border-radius:7px; padding:3px 12px; font-size:13px; cursor:pointer; line-height:1.2;}
+  .btn-nav-col:active{opacity:.6;}
+  .rev-scroll thead th{position:sticky; top:0; z-index:2; background:var(--card);}
   .cell-editable{cursor:pointer; text-decoration:underline dotted var(--border); text-underline-offset:3px;}
   .cell-editable:active{background:var(--card2);}
   .btn-borrar-fila{background:transparent; border:none; font-size:15px; padding:2px 4px; cursor:pointer; line-height:1;}
@@ -531,8 +541,9 @@
     </div>
     <div class="rev-resumen" id="revResumen"></div>
     <div class="hint-rev" id="revHint"></div>
-    <div style="margin:2px 0 6px;"><button class="btn-texto" id="btnLimpiarFiltrosCol" style="display:none;">✕ Limpiar filtros</button></div>
-    <div class="table-scroll">
+    <div style="margin:2px 0 6px;"><button class="btn-texto" id="btnLimpiarFiltrosCol" style="display:none;">✕ Limpiar filtros</button>
+      <span class="nav-cols"><button class="btn-nav-col" id="btnColIzq" aria-label="Ver columnas a la izquierda">◀</button><span>Columnas</span><button class="btn-nav-col" id="btnColDer" aria-label="Ver columnas a la derecha">▶</button></span></div>
+    <div class="table-scroll rev-scroll">
       <table>
         <thead><tr><th></th><th><span class="th-fl">Proveedor<button class="btn-filtro-col" data-fcol="0" aria-label="Filtrar Proveedor" title="Filtrar Proveedor"></button></span></th><th><span class="th-fl">Código Proveedor<button class="btn-filtro-col" data-fcol="1" aria-label="Filtrar Código Proveedor" title="Filtrar Código Proveedor"></button></span></th><th><span class="th-fl">Código<button class="btn-filtro-col" data-fcol="2" aria-label="Filtrar Código" title="Filtrar Código"></button></span></th><th><span class="th-fl">Descripción<button class="btn-filtro-col" data-fcol="3" aria-label="Filtrar Descripción" title="Filtrar Descripción"></button></span></th><th><span class="th-fl">Lote<button class="btn-filtro-col" data-fcol="4" aria-label="Filtrar Lote" title="Filtrar Lote"></button></span></th><th><span class="th-fl">Fecha Vcto<button class="btn-filtro-col" data-fcol="5" aria-label="Filtrar Fecha Vcto" title="Filtrar Fecha Vcto"></button></span></th><th><span class="th-fl">Cantidad<button class="btn-filtro-col" data-fcol="6" aria-label="Filtrar Cantidad" title="Filtrar Cantidad"></button></span></th><th><span class="th-fl">Ubicación<button class="btn-filtro-col" data-fcol="7" aria-label="Filtrar Ubicación" title="Filtrar Ubicación"></button></span></th><th><span class="th-fl">UDC<button class="btn-filtro-col" data-fcol="8" aria-label="Filtrar UDC" title="Filtrar UDC"></button></span></th><th><span class="th-fl">Usuario<button class="btn-filtro-col" data-fcol="9" aria-label="Filtrar Usuario" title="Filtrar Usuario"></button></span></th><th><span class="th-fl">Estado<button class="btn-filtro-col" data-fcol="10" aria-label="Filtrar Estado" title="Filtrar Estado"></button></span></th><th><span class="th-fl">Fecha<button class="btn-filtro-col" data-fcol="11" aria-label="Filtrar Fecha" title="Filtrar Fecha"></button></span></th><th><span class="th-fl">Hora<button class="btn-filtro-col" data-fcol="12" aria-label="Filtrar Hora" title="Filtrar Hora"></button></span></th></tr></thead>
         <tbody id="revBody"></tbody>
@@ -813,6 +824,7 @@ function editarCampoLocal(id, campo, valor){
     cambio = true;
     const nuevo = {...r, [campo]: valorFinal};
     if(r.sincronizado) nuevo.edicionPendiente = true;
+    nuevo.cambioLocalEn = Date.now();
     return nuevo;
   });
   if(cambio){
@@ -855,9 +867,14 @@ function editarRegistroLocal(id, cambios){
       if(String(nuevo[c]) !== String(v)){ nuevo[c] = v; hubo = true; }
     });
     if(hubo && r.sincronizado) nuevo.edicionPendiente = true;
+    if(hubo) nuevo.cambioLocalEn = Date.now();
     return hubo ? nuevo : r;
   });
-  if(hubo){ saveRows(rows); showToast("Cambio guardado"); syncAll(); }
+  if(hubo){
+    saveRows(rows); showToast("Cambio guardado");
+    // Se envía de inmediato (sin esperar a que termine una sincronización larga en curso)
+    Promise.resolve().then(()=> (navigator.onLine && !SHEET_WEB_APP_URL.startsWith("PEGA_AQUI")) ? pushEdiciones() : null).catch(()=>{}).then(()=> syncAll());
+  }
   return hubo;
 }
 document.addEventListener("click", (e)=>{
@@ -1439,6 +1456,8 @@ document.getElementById("revProveedor").addEventListener("change", (e)=>{ revPro
     if(pop.classList.contains("mostrar") && !e.target.closest("#filtroColPop")) cerrar();
   }, true);
 })();
+document.getElementById("btnColIzq").addEventListener("click", ()=> document.querySelector(".rev-scroll").scrollBy({left:-340, behavior:"smooth"}));
+document.getElementById("btnColDer").addEventListener("click", ()=> document.querySelector(".rev-scroll").scrollBy({left:340, behavior:"smooth"}));
 document.getElementById("btnLimpiarFiltrosCol").addEventListener("click", ()=>{
   revColFiltros = {};
   renderRevision(true);
@@ -2441,11 +2460,18 @@ function renderSyncScreen(){
     : "Aún no se ha sincronizado.";
 }
 
+// Campos que se pueden corregir desde la app: sirven para saber si una fila cambió mientras
+// su envío estaba en camino (en ese caso NO se debe dar por enviada con el valor viejo).
+const CAMPOS_SYNC = ["proveedor","codigo","lote","vcto","cantidad","ubicacion"];
+const instantaneaCampos = r => { const o = {}; CAMPOS_SYNC.forEach(c=> o[c] = String(r[c] == null ? "" : r[c])); return o; };
+const mismosCampos = (r, snap) => CAMPOS_SYNC.every(c=> String(r[c] == null ? "" : r[c]) === snap[c]);
+
 async function pushPendientes(){
   const rows = loadRows();
   const pendientes = rows.filter(r=>!r.sincronizado);
   if(pendientes.length === 0) return {ok:true, enviados:0};
   const idsEnviados = new Set(pendientes.map(r=>r.id));
+  const snapEnviados = new Map(pendientes.map(r=>[r.id, instantaneaCampos(r)]));
   const resp = await fetch(SHEET_WEB_APP_URL, {
     method: "POST",
     headers: {"Content-Type": "text/plain;charset=utf-8"},
@@ -2458,7 +2484,8 @@ async function pushPendientes(){
   // Google Apps Script a veces no deja LEER la respuesta del POST desde el navegador
   // (aunque la fila ya quedó guardada en la hoja); si esperáramos a leerla para recién
   // marcar "sincronizado", esa fila se reintentaría en el siguiente ciclo y quedaría duplicada.
-  saveRows(loadRows().map(r=> idsEnviados.has(r.id) ? {...r, sincronizado:true} : r));
+  // Si la fila se corrigió (p. ej. cambio de proveedor) mientras se enviaba, queda con edición pendiente
+  saveRows(loadRows().map(r=> idsEnviados.has(r.id) ? {...r, sincronizado:true, cambioLocalEn:Date.now(), edicionPendiente: r.edicionPendiente || !mismosCampos(r, snapEnviados.get(r.id))} : r));
   let data = { ok:true };
   try{ data = await resp.json(); }catch(_e){ /* respuesta no legible: la fila ya se guardó igual */ }
   return { ...data, enviados: pendientes.length };
@@ -2466,21 +2493,35 @@ async function pushPendientes(){
 
 // Envía a Google Sheets las correcciones hechas a filas que ya estaban guardadas
 // (código, lote, vencimiento, cantidad o ubicación editados desde la app).
+let enviandoEdiciones = false;
 async function pushEdiciones(){
+  if(enviandoEdiciones) return; // ya hay un envío en camino; lo que cambie después se manda en el siguiente
   const rows = loadRows();
   const pendientes = rows.filter(r=>r.edicionPendiente);
   if(pendientes.length === 0) return;
-  const idsEnviados = new Set(pendientes.map(r=>r.id));
-  const resp = await fetch(SHEET_WEB_APP_URL, {
-    method: "POST",
-    headers: {"Content-Type": "text/plain;charset=utf-8"},
-    body: JSON.stringify({ actualizaciones: pendientes.map(r=>({
-      id:r.id, proveedor:r.proveedor, codigo:r.codigo, lote:r.lote, vcto:r.vcto,
-      cantidad:r.cantidad, ubicacion:r.ubicacion
-    })) })
-  });
-  saveRows(loadRows().map(r=> idsEnviados.has(r.id) ? {...r, edicionPendiente:false} : r));
-  try{ await resp.json(); }catch(_e){ /* respuesta no legible: la edición ya se guardó igual */ }
+  enviandoEdiciones = true;
+  try{
+    const snapEnviados = new Map(pendientes.map(r=>[r.id, instantaneaCampos(r)]));
+    const resp = await fetch(SHEET_WEB_APP_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify({ actualizaciones: pendientes.map(r=>({
+        id:r.id, proveedor:r.proveedor, codigo:r.codigo, lote:r.lote, vcto:r.vcto,
+        cantidad:r.cantidad, ubicacion:r.ubicacion
+      })) })
+    });
+    let data = null;
+    try{ data = await resp.json(); }catch(_e){ /* respuesta no legible: la edición ya se aplicó igual */ }
+    // Si el Sheet respondió que NO pudo (p. ej. "Ocupado" por varios usuarios a la vez), la edición
+    // sigue pendiente y se reintenta en el próximo ciclo; antes se daba por enviada y el pull la revertía.
+    if(data && data.ok === false) return;
+    // Solo se da por enviada si la fila no volvió a cambiar mientras viajaba la petición
+    saveRows(loadRows().map(r=>{
+      const snap = snapEnviados.get(r.id);
+      if(!snap) return r;
+      return {...r, edicionPendiente: !mismosCampos(r, snap), cambioLocalEn: Date.now()};
+    }));
+  } finally { enviandoEdiciones = false; }
 }
 
 // Avisa a Google Sheets que borre las filas marcadas para eliminar (las que ya estaban
@@ -2509,6 +2550,7 @@ async function pushEliminaciones(){
 // haya ingresado) y lo combina con lo que este dispositivo todavía no alcanzó a enviar.
 // Así cualquier celular o laptop que abra la app ve lo mismo, siempre.
 async function pullTodos(){
+  const inicioPull = Date.now();
   const resp = await fetch(SHEET_WEB_APP_URL + "?action=todos");
   const data = await resp.json();
   if(!data.ok || !data.filas) return;
@@ -2522,7 +2564,9 @@ async function pullTodos(){
   // hecho -- se veía como si la app "revirtiera" la edición sola.
   const idsEliminacionPendiente = new Set(cargarEliminacionesPendientes());
   const rowsActuales = loadRows();
-  const protegidas = rowsActuales.filter(r=> !r.sincronizado || r.edicionPendiente || r.estadoPendiente);
+  // También se protege lo que se editó/envió DESPUÉS de que empezó esta descarga: esa respuesta del
+  // Sheet es anterior al cambio y pisaría el valor nuevo con el viejo (el cambio "regresaba solo").
+  const protegidas = rowsActuales.filter(r=> !r.sincronizado || r.edicionPendiente || r.estadoPendiente || (r.cambioLocalEn && r.cambioLocalEn >= inicioPull));
   const idsProtegidos = new Set([...protegidas.map(r=>String(r.id)), ...idsEliminacionPendiente]);
 
   const desdeServidor = data.filas
