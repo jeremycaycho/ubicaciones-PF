@@ -195,6 +195,32 @@
   .nav-cols{float:right; display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted);}
   .btn-nav-col{background:var(--card2); border:1px solid var(--border); color:var(--text); border-radius:7px; padding:3px 12px; font-size:13px; cursor:pointer; line-height:1.2;}
   .btn-nav-col:active{opacity:.6;}
+  /* En pantallas anchas (computador / horizontal) todas las columnas caben sin mover la tabla:
+     se compactan los espacios y el texto largo baja de línea en vez de ensanchar la tabla */
+  @media (min-width:900px){
+    .rev-scroll table{width:100%; min-width:0; table-layout:auto; font-size:11.5px;}
+    .rev-scroll th, .rev-scroll td{padding:5px 3px; white-space:normal; overflow-wrap:anywhere;}
+    .rev-scroll td:nth-child(14){font-size:10.5px;}
+    .rev-scroll .celda-desc{min-width:110px;}
+    .rev-scroll td:nth-child(4), .rev-scroll td:nth-child(7), .rev-scroll td:nth-child(8), .rev-scroll td:nth-child(9), .rev-scroll td:nth-child(10), .rev-scroll td:nth-child(13), .rev-scroll td:nth-child(14){white-space:nowrap; overflow-wrap:normal;}
+    .rev-scroll .celda-desc{max-width:210px; font-size:11.5px;}
+    .rev-scroll .th-fl{white-space:normal; gap:2px;}
+    .rev-scroll .estado-pill{padding:2px 6px; font-size:10px; white-space:normal;}
+    .rev-scroll .btn-copiar{margin-left:2px;}
+    .rev-scroll th{overflow-wrap:normal;}
+    .nav-cols{display:none;}
+  }
+  /* Pantallas grandes: cada columna toma solo el ancho de su contenido y la Descripción absorbe el resto,
+     así no quedan huecos vacíos entre columnas */
+  @media (min-width:1200px){
+    .rev-scroll td{white-space:nowrap; width:1%; padding:5px 5px; overflow-wrap:normal;}
+    .rev-scroll th{width:1%; padding:5px 5px; overflow-wrap:normal;}
+    .rev-scroll th:nth-child(5), .rev-scroll td:nth-child(5){width:auto;}
+    .rev-scroll td:nth-child(2){white-space:normal;}
+    .rev-scroll .celda-desc{min-width:170px; max-width:none; white-space:normal !important;}
+    .rev-scroll .estado-pill{white-space:nowrap;}
+    .rev-scroll .th-fl{white-space:normal; gap:2px;}
+  }
   .rev-scroll thead th{position:sticky; top:0; z-index:2; background:var(--card);}
   .cell-editable{cursor:pointer; text-decoration:underline dotted var(--border); text-underline-offset:3px;}
   .cell-editable:active{background:var(--card2);}
@@ -545,7 +571,7 @@
       <span class="nav-cols"><button class="btn-nav-col" id="btnColIzq" aria-label="Ver columnas a la izquierda">◀</button><span>Columnas</span><button class="btn-nav-col" id="btnColDer" aria-label="Ver columnas a la derecha">▶</button></span></div>
     <div class="table-scroll rev-scroll">
       <table>
-        <thead><tr><th></th><th><span class="th-fl">Proveedor<button class="btn-filtro-col" data-fcol="0" aria-label="Filtrar Proveedor" title="Filtrar Proveedor"></button></span></th><th><span class="th-fl">Código Proveedor<button class="btn-filtro-col" data-fcol="1" aria-label="Filtrar Código Proveedor" title="Filtrar Código Proveedor"></button></span></th><th><span class="th-fl">Código<button class="btn-filtro-col" data-fcol="2" aria-label="Filtrar Código" title="Filtrar Código"></button></span></th><th><span class="th-fl">Descripción<button class="btn-filtro-col" data-fcol="3" aria-label="Filtrar Descripción" title="Filtrar Descripción"></button></span></th><th><span class="th-fl">Lote<button class="btn-filtro-col" data-fcol="4" aria-label="Filtrar Lote" title="Filtrar Lote"></button></span></th><th><span class="th-fl">Fecha Vcto<button class="btn-filtro-col" data-fcol="5" aria-label="Filtrar Fecha Vcto" title="Filtrar Fecha Vcto"></button></span></th><th><span class="th-fl">Cantidad<button class="btn-filtro-col" data-fcol="6" aria-label="Filtrar Cantidad" title="Filtrar Cantidad"></button></span></th><th><span class="th-fl">Ubicación<button class="btn-filtro-col" data-fcol="7" aria-label="Filtrar Ubicación" title="Filtrar Ubicación"></button></span></th><th><span class="th-fl">UDC<button class="btn-filtro-col" data-fcol="8" aria-label="Filtrar UDC" title="Filtrar UDC"></button></span></th><th><span class="th-fl">Usuario<button class="btn-filtro-col" data-fcol="9" aria-label="Filtrar Usuario" title="Filtrar Usuario"></button></span></th><th><span class="th-fl">Estado<button class="btn-filtro-col" data-fcol="10" aria-label="Filtrar Estado" title="Filtrar Estado"></button></span></th><th><span class="th-fl">Fecha<button class="btn-filtro-col" data-fcol="11" aria-label="Filtrar Fecha" title="Filtrar Fecha"></button></span></th><th><span class="th-fl">Hora<button class="btn-filtro-col" data-fcol="12" aria-label="Filtrar Hora" title="Filtrar Hora"></button></span></th></tr></thead>
+        <thead><tr><th></th><th><span class="th-fl">Proveedor<button class="btn-filtro-col" data-fcol="0" aria-label="Filtrar Proveedor" title="Filtrar Proveedor"></button></span></th><th><span class="th-fl">Familia<button class="btn-filtro-col" data-fcol="1" aria-label="Filtrar Familia" title="Filtrar Familia"></button></span></th><th><span class="th-fl">Código<button class="btn-filtro-col" data-fcol="2" aria-label="Filtrar Código" title="Filtrar Código"></button></span></th><th><span class="th-fl">Descripción<button class="btn-filtro-col" data-fcol="3" aria-label="Filtrar Descripción" title="Filtrar Descripción"></button></span></th><th><span class="th-fl">Lote<button class="btn-filtro-col" data-fcol="4" aria-label="Filtrar Lote" title="Filtrar Lote"></button></span></th><th><span class="th-fl">Fecha Vcto<button class="btn-filtro-col" data-fcol="5" aria-label="Filtrar Fecha Vcto" title="Filtrar Fecha Vcto"></button></span></th><th><span class="th-fl">Cantidad<button class="btn-filtro-col" data-fcol="6" aria-label="Filtrar Cantidad" title="Filtrar Cantidad"></button></span></th><th><span class="th-fl">Ubicación<button class="btn-filtro-col" data-fcol="7" aria-label="Filtrar Ubicación" title="Filtrar Ubicación"></button></span></th><th><span class="th-fl">UDC<button class="btn-filtro-col" data-fcol="8" aria-label="Filtrar UDC" title="Filtrar UDC"></button></span></th><th><span class="th-fl">Usuario<button class="btn-filtro-col" data-fcol="9" aria-label="Filtrar Usuario" title="Filtrar Usuario"></button></span></th><th><span class="th-fl">Estado<button class="btn-filtro-col" data-fcol="10" aria-label="Filtrar Estado" title="Filtrar Estado"></button></span></th><th><span class="th-fl">Fecha<button class="btn-filtro-col" data-fcol="11" aria-label="Filtrar Fecha" title="Filtrar Fecha"></button></span></th><th><span class="th-fl">Hora<button class="btn-filtro-col" data-fcol="12" aria-label="Filtrar Hora" title="Filtrar Hora"></button></span></th></tr></thead>
         <tbody id="revBody"></tbody>
       </table>
     </div>
@@ -1174,7 +1200,7 @@ function exportarTarjetasExcel(terminados){
   if(!terminados || terminados.length === 0) return false;
   const listaUnica = (rows, f)=> [...new Set(rows.map(f).filter(Boolean))].join(", ");
   const resumen = [["Fecha","Proveedor","Registros","Registraron","Ingresaron","Primer registro","Último registro"]];
-  const detalle = [["Proveedor","Código Proveedor","Código","Descripción","Lote","Fecha Vcto","Cantidad","Ubicación","UDC","Usuario","Estado","Fecha","Hora"]];
+  const detalle = [["Proveedor","Familia","Código","Descripción","Lote","Fecha Vcto","Cantidad","Ubicación","UDC","Usuario","Estado","Fecha","Hora"]];
   terminados.forEach(rows=>{
     const horas = rows.map(r=>String(r.hora||"")).filter(Boolean).sort();
     resumen.push([rows[0].fechaKey, rows[0].proveedor, rows.length, listaUnica(rows, r=>r.usuario), listaUnica(rows, quienIngreso), horas[0]||"", horas[horas.length-1]||""]);
