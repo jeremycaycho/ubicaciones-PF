@@ -1333,15 +1333,19 @@ async function confirmarEliminarExportadas(){
   p.ids.forEach(id=>{ if(!pend.includes(id)) pend.push(id); });
   guardarEliminacionesPendientes(pend);
   avanceSel.clear(); renderAvance();
-  modalElimExp("espera", "Eliminando…", "Enviando la orden de eliminar al Sheet. Un momento…");
+  const total = p.nFilas;
+  const quedanAhora = ()=> cargarEliminacionesPendientes().filter(id=> set.has(id)).length;
+  modalElimExp("espera", "Eliminando…", "Eliminando del Sheet: 0 de " + total + " fila(s)…");
   syncAll();
-  for(let i = 0; i < 50; i++){                                 // espera hasta ~25 s a que el Sheet confirme
-    if(!cargarEliminacionesPendientes().some(id=> set.has(id))) break;
+  for(let i = 0; i < 120; i++){                                // espera hasta ~60 s a que el Sheet confirme, mostrando el avance
+    const q = quedanAhora();
+    if(q === 0) break;
+    modalElimExp("espera", "Eliminando…", "Eliminando del Sheet: " + (total - q) + " de " + total + " fila(s)…");
     await new Promise(r=> setTimeout(r, 500));
   }
-  const quedan = cargarEliminacionesPendientes().filter(id=> set.has(id)).length;
-  if(quedan === 0) modalElimExp("listo", "Eliminado", "Se eliminaron " + p.nFilas + " fila(s) de " + p.provs.length + " proveedor(es) (" + p.provs.join(", ") + ") del Sheet.");
-  else modalElimExp("listo", "Pendiente de eliminar", quedan + " de " + p.nFilas + " fila(s) todavía no se eliminaron del Sheet (sin conexión o respuesta lenta). Ya no se ven en la app y se eliminarán solas apenas haya conexión.");
+  const quedan = quedanAhora(), hechas = total - quedan;
+  if(quedan === 0) modalElimExp("listo", "Eliminado", "Se eliminaron exitosamente " + hechas + " de " + total + " fila(s) de " + p.provs.length + " proveedor(es) (" + p.provs.join(", ") + ") del Sheet.");
+  else modalElimExp("listo", "Eliminación en curso", "Se eliminaron " + hechas + " de " + total + " fila(s) del Sheet. Las " + quedan + " restantes ya no se ven en la app y se siguen eliminando solas; mantén la app abierta unos minutos.");
   if(document.getElementById("screen-avance").classList.contains("active")) renderAvance();
 }
 document.getElementById("modalElimExpCancelar").addEventListener("click", ()=>{ elimExpPendiente = null; document.getElementById("modalElimExpOverlay").classList.remove("mostrar"); showToast("No se eliminó nada"); });
