@@ -939,6 +939,10 @@ document.getElementById("mrGuardar").addEventListener("click", ()=>{
 
 /* ---------- BORRAR FILA (con ventanita de confirmación) ---------- */
 const STORAGE_ELIMINACIONES = "ubicaciones_eliminaciones_pendientes_v1";
+// Ids cuya eliminación ya se envió al Sheet pero todavía no se comprobó que desaparecieron: {id:{t, n}}
+const STORAGE_ELIM_ENVIADAS = "ubicaciones_eliminaciones_enviadas_v1";
+function cargarElimEnviadas(){ try{ return JSON.parse(localStorage.getItem(STORAGE_ELIM_ENVIADAS) || "{}") || {}; }catch(_e){ return {}; } }
+function guardarElimEnviadas(o){ try{ localStorage.setItem(STORAGE_ELIM_ENVIADAS, JSON.stringify(o)); }catch(_e){} }
 function cargarEliminacionesPendientes(){
   try{ return JSON.parse(localStorage.getItem(STORAGE_ELIMINACIONES) || "[]"); }
   catch(e){ return []; }
@@ -1304,6 +1308,7 @@ function claveTarjeta(g){ return g.fecha + "|" + g.prov + "|" + g.total; } // si
 const ICONO_BASURA = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>';
 /* ---- Eliminar proveedores terminados del Sheet (se borra exactamente lo seleccionado; Exportar es un botón aparte) ---- */
 let elimExpPendiente = null;
+const elimFallidas = new Set();   // ids que el Sheet no llegó a borrar tras varios intentos
 function modalElimExp(modo, titulo, texto){
   document.getElementById("modalElimExpTitulo").textContent = titulo;
   document.getElementById("modalElimExpDetalle").textContent = texto;
@@ -1333,18 +1338,23 @@ async function confirmarEliminarExportadas(){
   p.ids.forEach(id=>{ if(!pend.includes(id)) pend.push(id); });
   guardarEliminacionesPendientes(pend);
   avanceSel.clear(); renderAvance();
-  const total = p.nFilas;
-  const quedanAhora = ()=> cargarEliminacionesPendientes().filter(id=> set.has(id)).length;
+  const total = p.nFilas, overlay = document.getElementById("modalElimExpOverlay");
+  const quedanAhora = ()=>{ const env = cargarElimEnviadas(), pend = cargarEliminacionesPendientes(); return p.ids.filter(id=> pend.includes(id) || env[id]).length; };   // pendientes o aún sin comprobar en el Sheet
   modalElimExp("espera", "Eliminando…", "Eliminando del Sheet: 0 de " + total + " fila(s)…");
-  syncAll();
-  for(let i = 0; i < 120; i++){                                // espera hasta ~60 s a que el Sheet confirme, mostrando el avance
+  // Se envía YA (sin esperar a que termine una sincronización larga que esté en curso) y luego se sincroniza
+  Promise.resolve().then(()=> pushEliminaciones()).catch(()=>{}).then(()=> syncAll());
+  let cerrado = false;
+  for(let i = 0; i < 120; i++){                                // espera hasta ~60 s mostrando el avance
     const q = quedanAhora();
     if(q === 0) break;
+    if(!overlay.classList.contains("mostrar")){ cerrado = true; break; }   // si cierran el aviso, no se vuelve a abrir
     modalElimExp("espera", "Eliminando…", "Eliminando del Sheet: " + (total - q) + " de " + total + " fila(s)…");
-    await new Promise(r=> setTimeout(r, 500));
+    await new Promise(r=> setTimeout(r, 400));
   }
-  const quedan = quedanAhora(), hechas = total - quedan;
-  if(quedan === 0) modalElimExp("listo", "Eliminado", "Se eliminaron exitosamente " + hechas + " de " + total + " fila(s) de " + p.provs.length + " proveedor(es) (" + p.provs.join(", ") + ") del Sheet.");
+  const quedan = quedanAhora(), fallidas = p.ids.filter(id=> elimFallidas.has(id)).length, hechas = total - quedan - fallidas;
+  if(cerrado){ showToast(quedan ? "La eliminación sigue en segundo plano (" + hechas + " de " + total + ")" : "Se eliminaron " + hechas + " de " + total + " fila(s)"); }
+  else if(fallidas) modalElimExp("listo", "No se pudo eliminar todo", "El Sheet no eliminó " + fallidas + " de " + total + " fila(s) tras varios intentos; esas filas vuelven a verse en Avance. Se eliminaron " + hechas + ". Revisa que Codigo.gs esté publicado como nueva versión e inténtalo de nuevo.");
+  else if(quedan === 0) modalElimExp("listo", "Eliminado", "Se eliminaron exitosamente " + hechas + " de " + total + " fila(s) de " + p.provs.length + " proveedor(es) (" + p.provs.join(", ") + ") del Sheet.");
   else modalElimExp("listo", "Eliminación en curso", "Se eliminaron " + hechas + " de " + total + " fila(s) del Sheet. Las " + quedan + " restantes ya no se ven en la app y se siguen eliminando solas; mantén la app abierta unos minutos.");
   if(document.getElementById("screen-avance").classList.contains("active")) renderAvance();
 }
@@ -2556,7 +2566,13 @@ async function pushEdiciones(){
 
 // Avisa a Google Sheets que borre las filas marcadas para eliminar (las que ya estaban
 // sincronizadas cuando se borraron desde la app).
+let enviandoEliminaciones = false;
 async function pushEliminaciones(){
+  if(enviandoEliminaciones) return;   // ya hay un envío en camino (evita mandar el mismo lote dos veces)
+  enviandoEliminaciones = true;
+  try{ await pushEliminacionesInterno(); } finally { enviandoEliminaciones = false; }
+}
+async function pushEliminacionesInterno(){
   let pendientes = cargarEliminacionesPendientes();
   // Se envían en lotes de 60 (borrar muchas filas de golpe tardaría demasiado en un solo envío)
   while(pendientes.length > 0){
@@ -2567,10 +2583,20 @@ async function pushEliminaciones(){
         headers: {"Content-Type": "text/plain;charset=utf-8"},
         body: JSON.stringify({ eliminaciones: lote })
       });
-      // Igual que con inserciones/ediciones: en cuanto se entrega la petición se da por
-      // aplicada (Apps Script a veces no deja leer la respuesta aunque sí se ejecutó).
+      let data = null;
+      try{ data = await resp.json(); }catch(_e){ /* respuesta no legible: se comprobará con la siguiente descarga */ }
+      // Si el Sheet dijo que NO pudo (Ocupado, error, etc.) las filas siguen pendientes y se reintentan.
+      // Antes se daban por borradas con solo entregar la petición, y volvían a aparecer sin haberse borrado.
+      if(data && data.ok === false) return;
       guardarEliminacionesPendientes(cargarEliminacionesPendientes().filter(id=> !lote.includes(id)));
-      try{ await resp.json(); }catch(_e){}
+      // Quedan "por comprobar": si en la próxima descarga el Sheet todavía las trae, se vuelven a pedir.
+      // Si el Sheet confirma que borró todas las del lote no hace falta comprobar nada más (el aviso sale al instante);
+      // solo si respondió menos de lo pedido, o no se pudo leer, se comprueba con la siguiente descarga.
+      if(!(data && data.ok === true && Number(data.eliminadas) >= lote.length)){
+        const env = cargarElimEnviadas(), ahora = Date.now();
+        lote.forEach(id=>{ env[id] = { t: ahora, n: (env[id] && env[id].n) || 0 }; });
+        guardarElimEnviadas(env);
+      }
     }catch(err){ return; /* fallo real de red: se reintenta en el próximo ciclo */ }
     pendientes = cargarEliminacionesPendientes();
   }
@@ -2597,6 +2623,25 @@ async function pullTodos(){
   // También se protege lo que se editó/envió DESPUÉS de que empezó esta descarga: esa respuesta del
   // Sheet es anterior al cambio y pisaría el valor nuevo con el viejo (el cambio "regresaba solo").
   const protegidas = rowsActuales.filter(r=> !r.sincronizado || r.edicionPendiente || r.estadoPendiente || (r.cambioLocalEn && r.cambioLocalEn >= inicioPull));
+  // Comprobación de lo que ya se mandó borrar: si el Sheet (descarga posterior al envío) todavía trae
+  // esa fila, el borrado no se hizo -> se vuelve a pedir (máx. 5 veces) y mientras tanto sigue oculta.
+  const env = cargarElimEnviadas(), idsEnSheet = new Set(data.filas.map(f=>String(f.id))), ahoraV = Date.now();
+  let cambioEnv = false, reencolar = [];
+  Object.keys(env).forEach(id=>{
+    const e = env[id];
+    if(ahoraV - e.t > 30*60*1000){ delete env[id]; cambioEnv = true; return; }
+    if(inicioPull <= e.t) return;                       // descarga anterior al envío: no sirve para comprobar
+    if(!idsEnSheet.has(id)){ delete env[id]; cambioEnv = true; return; }   // ya no está: borrado confirmado
+    if(e.n >= 5){ delete env[id]; cambioEnv = true; elimFallidas.add(id); return; }   // se rindió: vuelve a mostrarse
+    env[id] = { t: e.t, n: e.n + 1 }; cambioEnv = true; reencolar.push(id);
+  });
+  if(cambioEnv) guardarElimEnviadas(env);
+  if(reencolar.length){
+    const pend = cargarEliminacionesPendientes(); reencolar.forEach(id=>{ if(!pend.includes(id)) pend.push(id); });
+    guardarEliminacionesPendientes(pend); reencolar.forEach(id=> idsEliminacionPendiente.add(id));
+  }
+  // Mientras se comprueba, esas filas siguen ocultas
+  Object.keys(env).forEach(id=> idsEliminacionPendiente.add(id));
   const idsProtegidos = new Set([...protegidas.map(r=>String(r.id)), ...idsEliminacionPendiente]);
 
   const desdeServidor = data.filas
